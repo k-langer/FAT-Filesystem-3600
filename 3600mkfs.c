@@ -1,4 +1,3 @@
-
 /*
  * CS3600, Spring 2013
  * Project 2 Starter Code
@@ -21,6 +20,27 @@
 
 #include "3600fs.h"
 #include "disk.h"
+
+#define MAGIC_NUMBER = 0xBADBLOCK
+typedef char BYTE; 
+
+typedef struct VCB_s 
+{
+	BYTE magic_number[4];
+	BYTE blocksize[4]; 
+	BYTE de_start[4];
+	BYTE de_length[4];
+	BYTE fat_start[4]; 
+	BYTE fat_length[4]; 
+	BYTE db_start[4]; 
+	BYTE user[4];
+	BYTE group[4];
+	BYTE mode[4];
+	BYTE access_time[4];
+	BYTE modify_time[4];
+	BYTE create_time[4];
+	BYTE unused[460];    
+}VCB; 
 
 void myformat(int size) {
   // Do not touch or move this function
