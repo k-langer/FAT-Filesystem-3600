@@ -43,6 +43,7 @@ BYTE unused[460];
 }vcb;
 
 //64 bytes 512/64=8
+#define DIRENT_SIZE 64
 typedef struct dirent_s
 {
 unsigned int valid;
@@ -57,6 +58,8 @@ int create_time;
 char name[28];
 } dirent;
 
+
+//5* 512/(32) = 80
 typedef struct fatent_s
 {
 unsigned int used:1;
@@ -68,24 +71,44 @@ void myformat(int size) {
   // Do not touch or move this function
   dcreate_connect();
 
-  
+  int i = size/89; //80 data blocks, 8 directory blocks, and 1 fat block
   char *tmp = (char *) malloc(BLOCKSIZE);
- 
+  int place = 0;
   memset(tmp, 0, BLOCKSIZE);
-  vcb* block;
-  block = (vcb*)tmp;
-  block->magic_number = MAGIC_NUMBER;
-  block->blocksize = BLOCKSIZE;
+  vcb* vcb_block;
+  vcb_block = (vcb*)tmp;
+  vcb_block->magic_number = MAGIC_NUMBER;
+  vcb_block->blocksize = BLOCKSIZE;
+  vcb_block->de_start = 1;
+  vcb_block->de_length = i*8;
+  vcb_block->fat_start = i*8+1; 
+  vcb_block->fat_length = i;
+  vcb_block->db_start = 1+i*8+i;
+  //printf("de_start %d\nde_length %d\nfat_start %d\nfat_length %d\ndb_start %d\n",vcb_block->de_start,vcb_block->de_length,vcb_block->fat_start,vcb_block->fat_length,vcb_block->db_start);
   //block->user = getuid();
   //block->group = getgid();
   //block->create_time = time();
-   dwrite(0, tmp);
+   dwrite(place++, tmp);	
+	
+  memset(tmp, 0, BLOCKSIZE); 
+  dirent* dir_block = (dirent*)tmp;
+  dir_block->size = DIRENT_SIZE;
+  
 
-   memset(tmp, 0, BLOCKSIZE);
+  int start = place; 
+  while(place<(start+i*8))
+	dwrite(place++,tmp);
+  
+  start = place; 
+  memset(tmp, 0, BLOCKSIZE); 
+  fatent*fat_block = (fatent*)tmp;
+  fat_block->used = 0;
+   while(place<(start+i))
+	dwrite(place++,tmp);
 
-
+ memset(tmp, 0, BLOCKSIZE);
   // now, write that to every block
-  for (int i=0; i<size; i++)
+  for (int i=place; i<size; i++)
     if (dwrite(i, tmp) < 0)
       perror("Error while writing to disk");
   free(tmp);

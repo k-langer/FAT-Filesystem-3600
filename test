@@ -18,7 +18,7 @@ my $current = 0;
 my $child = -1;
 my $childerror = 0;
 
-$DIR = tempdir( DIR => "/tmp", CLEANUP => 1);
+$DIR = tempdir( "3600fs.XXXXXX", DIR => "/tmp", CLEANUP => 1);
 if (! -e $DIR) { mkdir($DIR); }
 chmod(0755, $DIR);
 
@@ -456,7 +456,7 @@ sub runFS {
     open(STDOUT, ">> fs-log.txt");
     open(STDERR, ">> fs-log.txt");
     print "RUNNING '$FS -s -d $DIR'\n";
-    exec("$FS", "-d", "$DIR");
+    exec("$FS", "-s", "-d", "$DIR");
     exit(0);
   }
   sleep(1);
