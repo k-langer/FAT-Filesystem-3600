@@ -21,47 +21,74 @@
 #include "3600fs.h"
 #include "disk.h"
 
-#define MAGIC_NUMBER = 0xBADBLOCK
+#define MAGIC_NUMBER 0xBADB10CC
 typedef char BYTE; 
 
 typedef struct VCB_s 
 {
-	BYTE magic_number[4];
-	BYTE blocksize[4]; 
-	BYTE de_start[4];
-	BYTE de_length[4];
-	BYTE fat_start[4]; 
-	BYTE fat_length[4]; 
-	BYTE db_start[4]; 
-	BYTE user[4];
-	BYTE group[4];
-	BYTE mode[4];
-	BYTE access_time[4];
-	BYTE modify_time[4];
-	BYTE create_time[4];
+	int magic_number;
+	int blocksize; 
+	int de_start;
+	int de_length;
+	int fat_start; 
+	int fat_length; 
+	int db_start; 
+	uid_t user;
+	gid_t group;
+	mode_t mode;
+	int access_time;
+	int modify_time;
+	int create_time;
 	BYTE unused[460];    
-}VCB; 
+}vcb; 
+/*
+//64 bytes 512/64=8
+typedef struct dirent_s
+{
+	unsigned in valid; 
+	unsigned int first_block;
+	unsigned int size;
+	uid_t user; 
+	gid_t group;
+	mode_t mode;
+	int access_time;
+	int modify_time;
+	int create_time;
+	char name[28];
+} dirent;
 
+typedef struct fatent_s
+{
+	unsigned int used:1;
+	unsigned int eof:1;
+	unsigned int next:30;
+} fatent;
+*/
 void myformat(int size) {
   // Do not touch or move this function
   dcreate_connect();
 
-  /* 3600: FILL IN CODE HERE.  YOU SHOULD INITIALIZE ANY ON-DISK
-           STRUCTURES TO THEIR INITIAL VALUE, AS YOU ARE FORMATTING
-           A BLANK DISK.  YOUR DISK SHOULD BE size BLOCKS IN SIZE. */
-
-  /* 3600: AN EXAMPLE OF READING/WRITING TO THE DISK IS BELOW - YOU'LL
-           WANT TO REPLACE THE CODE BELOW WITH SOMETHING MEANINGFUL. */
-
-  // first, create a zero-ed out array of memory  
+  
   char *tmp = (char *) malloc(BLOCKSIZE);
+ 
   memset(tmp, 0, BLOCKSIZE);
+  vcb* block;
+  block = (vcb*)tmp;
+  block->magic_number = MAGIC_NUMBER;
+  block->blocksize = BLOCKSIZE;
+  //block->user = getuid();
+  //block->group = getgid();
+  //block->create_time = time();
+   dwrite(0, tmp);
+
+   memset(tmp, 0, BLOCKSIZE);
+
 
   // now, write that to every block
   for (int i=0; i<size; i++) 
     if (dwrite(i, tmp) < 0) 
       perror("Error while writing to disk");
-
+  free(tmp);
   // voila! we now have a disk containing all zeros
 
   // Do not touch or move this function
@@ -80,3 +107,4 @@ int main(int argc, char** argv) {
   printf("Formatting the disk with size %lu \n", size);
   myformat(size);
 }
+
