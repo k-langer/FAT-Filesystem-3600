@@ -41,11 +41,11 @@ typedef struct VCB_s
 	int create_time;
 	BYTE unused[460];    
 }vcb; 
-/*
+
 //64 bytes 512/64=8
 typedef struct dirent_s
 {
-	unsigned in valid; 
+	unsigned int valid; 
 	unsigned int first_block;
 	unsigned int size;
 	uid_t user; 
@@ -63,7 +63,7 @@ typedef struct fatent_s
 	unsigned int eof:1;
 	unsigned int next:30;
 } fatent;
-*/
+
 void myformat(int size) {
   // Do not touch or move this function
   dcreate_connect();
