@@ -53,13 +53,14 @@ static void* vfs_mount(struct fuse_conn_info *conn) {
   dread(0,tmp);
   vcb*block = (vcb*)tmp;
   // Do not touch or move this code; connects the disk
-  if(block->magic_number != MAGIC_NUMBER)
-  { 
-	printf("Cannot mount file system\n");
-	return NULL;
-
-  }	
   dconnect();
+
+ if(block->magic_number != MAGIC_NUMBER)
+  {
+	printf("Cannot mount file system\n");
+	vfs_unmount();
+  }
+  
   return NULL;
 }
 

@@ -31,7 +31,7 @@ void myformat(int size) {
 	printf("Disk to small to fromat\n");
 	return;
   }
-  //size = (k+k/100) 
+  size = (k+k/100) 
   //int k = ((size-101)*129)/128; //80 data blocks, 8 directory blocks, and 1 fat block
   char *tmp = (char *) malloc(BLOCKSIZE);
   int place = 0;

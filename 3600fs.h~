@@ -9,7 +9,7 @@ typedef char BYTE;
 
 typedef struct VCB_s
 {
-unsigned int magic_number;
+int magic_number;
 int blocksize;
 int de_start;
 int de_length;
