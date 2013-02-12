@@ -56,7 +56,7 @@ static void* vfs_mount(struct fuse_conn_info *conn) {
   if(block->magic_number != MAGIC_NUMBER)
   { 
 	printf("Cannot mount file system\n");
-	return NULL;
+	exit(1);
 
   }	
   dconnect();
