@@ -48,19 +48,17 @@
  *
  */
 static void* vfs_mount(struct fuse_conn_info *conn) {
-  fprintf(stderr, "vfs_mount called\n");
-  char*tmp = malloc(512);
-  dread(0,tmp);
-  vcb*block = (vcb*)tmp;
-  // Do not touch or move this code; connects the disk
-  if(block->magic_number != MAGIC_NUMBER)
-  { 
-	printf("Cannot mount file system\n");
-	exit(1);
-
-  }	
-  dconnect();
-  return NULL;
+    fprintf(stderr, "vfs_mount called\n");
+    char *tmp = malloc(512);
+    dread(0, tmp);
+    vcb* block = (vcb*)tmp;
+    // Do not touch or move this code; connects the disk
+    if(block->magic_number != MAGIC_NUMBER) { 
+        printf("Cannot mount file system\n");
+        exit(1);
+    }	
+    dconnect();
+    return NULL;
 }
 
 /*
@@ -68,14 +66,14 @@ static void* vfs_mount(struct fuse_conn_info *conn) {
  *
  */
 static void vfs_unmount (void *private_data) {
-  fprintf(stderr, "vfs_unmount called\n");
+    fprintf(stderr, "vfs_unmount called\n");
 
-  /* 3600: YOU SHOULD ADD CODE HERE TO MAKE SURE YOUR ON-DISK STRUCTURES
-           ARE IN-SYNC BEFORE THE DISK IS UNMOUNTED (ONLY NECESSARY IF YOU
-           KEEP DATA CACHED THAT'S NOT ON DISK */
+    /* 3600: YOU SHOULD ADD CODE HERE TO MAKE SURE YOUR ON-DISK STRUCTURES
+             ARE IN-SYNC BEFORE THE DISK IS UNMOUNTED (ONLY NECESSARY IF YOU
+             KEEP DATA CACHED THAT'S NOT ON DISK */
 
-  // Do not touch or move this code; unconnects the disk
-  dunconnect();
+    // Do not touch or move this code; unconnects the disk
+    dunconnect();
 }
 
 /* 
@@ -90,31 +88,31 @@ static void vfs_unmount (void *private_data) {
  *
  */
 static int vfs_getattr(const char *path, struct stat *stbuf) {
-  fprintf(stderr, "vfs_getattr called\n");
+    fprintf(stderr, "vfs_getattr called\n");
 
-  // Do not mess with this code 
-  stbuf->st_nlink = 1; // hard links
-  stbuf->st_rdev  = 0;
-  stbuf->st_blksize = BLOCKSIZE;
+    // Do not mess with this code 
+    stbuf->st_nlink = 1; // hard links
+    stbuf->st_rdev  = 0;
+    stbuf->st_blksize = BLOCKSIZE;
 
-  /* 3600: YOU MUST UNCOMMENT BELOW AND IMPLEMENT THIS CORRECTLY */
-  
-  /*
-  if (The path represents the root directory)
-    stbuf->st_mode  = 0777 | S_IFDIR;
-  else 
-    stbuf->st_mode  = <<file mode>> | S_IFREG;
+    /* 3600: YOU MUST UNCOMMENT BELOW AND IMPLEMENT THIS CORRECTLY */
+    
+    /*
+    if (The path represents the root directory)
+      stbuf->st_mode  = 0777 | S_IFDIR;
+    else 
+      stbuf->st_mode  = <<file mode>> | S_IFREG;
 
-  stbuf->st_uid     = // file uid
-  stbuf->st_gid     = // file gid
-  stbuf->st_atime   = // access time 
-  stbuf->st_mtime   = // modify time
-  stbuf->st_ctime   = // create time
-  stbuf->st_size    = // file size
-  stbuf->st_blocks  = // file size in blocks
-    */
+    stbuf->st_uid     = // file uid
+    stbuf->st_gid     = // file gid
+    stbuf->st_atime   = // access time 
+    stbuf->st_mtime   = // modify time
+    stbuf->st_ctime   = // create time
+    stbuf->st_size    = // file size
+    stbuf->st_blocks  = // file size in blocks
+      */
 
-  return 0;
+    return 0;
 }
 
 /*
@@ -210,7 +208,7 @@ static int vfs_write(const char *path, const char *buf, size_t size,
   /* 3600: NOTE THAT IF THE OFFSET+SIZE GOES OFF THE END OF THE FILE, YOU
            MAY HAVE TO EXTEND THE FILE (ALLOCATE MORE BLOCKS TO IT). */
 
-  return 0;
+    return 0;
 }
 
 /**
