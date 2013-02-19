@@ -5,7 +5,6 @@
  *
  */
 #define MAGIC_NUMBER 0xBADB10CC
-#define BLOCKSIZE 512
 typedef char BYTE;
 
 typedef struct VCB_s {
@@ -28,6 +27,7 @@ typedef struct VCB_s {
 
 //64 bytes 512/64=8
 #define MAX_FILES 100
+#define DIRENT_SIZE = 512 
 typedef struct dirent_s
 {
 	unsigned int valid;			//4 bytes
@@ -39,7 +39,7 @@ typedef struct dirent_s
 	int access_time;			//4 bytes
 	int modify_time;			//4 bytes
 	int create_time;			//4 bytes
-	char name[28];
+	char name[476]; //28
 } dirent;
 
 

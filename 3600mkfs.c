@@ -50,7 +50,7 @@ void myformat(int size) {
   	
     memset(tmp, 0, BLOCKSIZE); 
     dirent* dir_block = (dirent*)tmp;
-    dir_block->size = DIRENT_SIZE;
+    dir_block->size = 0;
     
 
     int start = place; 
