@@ -216,7 +216,8 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 		int block = vcBlock->de_start;
 		while (block - vcBlock->de_start < vcBlock->de_length) {
 			dread(block, dirEntry);
-			if (dirEntry->name) {
+			if (dirEntry->create_time) {
+				fprintf(stderr,"ahh! why\n");
 				if (!filler(buf, dirEntry->name, NULL, block + 1)) {
 					return 0;
 				}
@@ -245,7 +246,7 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
 		return -1;
 	}
 	dread(0, vcBlock);
-	dirent* dirEntry;
+	dirent* dirEntry = (dirent*)calloc(1, sizeof(dirent));
 	if (!dirEntry) {
 		return -1;
 	}
