@@ -23,6 +23,8 @@ typedef struct VCB_s {
 	int access_time;
 	int modify_time;
 	int create_time;
+
+	BYTE extra[460];
 } vcb;
 
 //64 bytes 512/64=8
