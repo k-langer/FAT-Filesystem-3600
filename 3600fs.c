@@ -218,7 +218,7 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 			dread(block, dirEntry);
 			if (dirEntry->create_time) {
 				fprintf(stderr,"ahh! why\n");
-				if (!filler(buf, dirEntry->name, NULL, block + 1)) {
+				if (!filler(buf, dirEntry->name, NULL, block)) {
 					return 0;
 				}
 			}	
