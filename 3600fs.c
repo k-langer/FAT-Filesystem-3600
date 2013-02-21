@@ -39,7 +39,6 @@
 #include "disk.h"
 
 vcb* vcBlock;
-dirent* dirEntry;
 
 /*
  * Initialize filesystem. Read in file system metadata and initialize
@@ -54,7 +53,6 @@ static void* vfs_mount(struct fuse_conn_info *conn) {
     fprintf(stderr, "vfs_mount called\n");
     dconnect();
     vcBlock = (vcb*)calloc(1, sizeof(vcb));
-    dirEntry = (dirent*)calloc(1, sizeof(dirent));
     dread(0, vcBlock);
     // Do not touch or move this code; connects the disk
     if(vcBlock->magic_number != MAGIC_NUMBER) { 
@@ -92,8 +90,9 @@ static void vfs_unmount (void *private_data) {
  */
 static int vfs_getattr(const char *path, struct stat *stbuf) {
     fprintf(stderr, "vfs_getattr called\n");
-
+   	
     // Do not mess with this code 
+
     stbuf->st_nlink = 1; // hard links
     stbuf->st_rdev  = 0;
     stbuf->st_blksize = BLOCKSIZE;
@@ -123,6 +122,8 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
 	    	stbuf->st_size    = 0;
 	    	stbuf->st_blocks  = 0;
 	} else {
+		dirent dirEntry_s;
+		dirent* dirEntry = &dirEntry_s;
 		if (!dirEntry) {
 			return -1;
 		}
@@ -244,6 +245,7 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
 		return -1;
 	}
 	dread(0, vcBlock);
+	dirent* dirEntry;
 	if (!dirEntry) {
 		return -1;
 	}
