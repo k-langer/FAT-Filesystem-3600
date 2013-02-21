@@ -224,6 +224,7 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 			} else {
 				return 0;
 			}
+			block++;
 		}
 		return 0;
 	}
@@ -235,8 +236,8 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
  *
  */
 static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) {
-    	char* filename = strtok(path, "/");
-	
+    	fprintf(stderr, "vfs_create called\n");
+	char* filename = strtok(path, "/");	
 	//only support root dir
 	if (strtok(NULL, "/") || !filename) {
 		return -1;
@@ -254,27 +255,41 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
 	int block = vcBlock->de_start;
 	while(block - vcBlock->de_start < vcBlock->de_length) {
 		dread(block, dirEntry);
-		if (!dirEntry->name) {
-			break;
-		} else if (strncmp(filename, dirEntry->name, strlen(filename)) == 0) {
+		if (strncmp(filename, dirEntry->name, strlen(filename)) == 0) {
 			return -EEXIST;
 		} else {
 			block++;
 		}
 	}
+
+	char foundEmpty = 0;
+	block = vcBlock->de_start;
+	while(block - vcBlock->de_start < vcBlock->de_length) {
+		dread(block, dirEntry);
+		if (!dirEntry->create_time) {
+			foundEmpty = 1;
+			break;
+		} else {
+			block++;
+		}
+	}
 	
-	strncpy(dirEntry->name, filename, 476);	//shouldn't be hardcoded
-	dirEntry->mode = mode;
-	dirEntry->user = geteuid();
-	dirEntry->group = getegid();
+	if (foundEmpty) {
+		strncpy(dirEntry->name, filename, 476);	//shouldn't be hardcoded
+		dirEntry->mode = mode;
+		dirEntry->user = geteuid();
+		dirEntry->group = getegid();
 
-	struct timespec currentTime;
-	clock_gettime(CLOCK_REALTIME, &currentTime);
-	dirEntry->access_time = currentTime.tv_sec;
-	dirEntry->modify_time = currentTime.tv_sec;
-	dirEntry->create_time = currentTime.tv_sec;
-
-	return 0;
+		struct timespec currentTime;
+		clock_gettime(CLOCK_REALTIME, &currentTime);
+		dirEntry->access_time = currentTime.tv_sec;
+		dirEntry->modify_time = currentTime.tv_sec;
+		dirEntry->create_time = currentTime.tv_sec;
+		dwrite(block, dirEntry);
+		return 0;
+	} else {
+		return -1;
+	}
 }
 
 /*
