@@ -213,7 +213,7 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 		if (!dirEntry) {
 			return -1;
 		}
-		int block = vcBlock->de_start;
+		int block = vcBlock->de_start + offset;
 		while (block - vcBlock->de_start < vcBlock->de_length) {
 			dread(block, dirEntry);
 			if (dirEntry->create_time) {
@@ -221,9 +221,7 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 				if (!filler(buf, dirEntry->name, NULL, block + 1)) {
 					return 0;
 				}
-			} else {
-				return 0;
-			}
+			}	
 			block++;
 		}
 		return 0;
