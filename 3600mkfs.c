@@ -9,7 +9,7 @@
 * your disk file).
 */
 
-
+#include <time.h>
 #include <math.h>
 #include <stdio.h>
 #include <fcntl.h>
@@ -18,6 +18,7 @@
 #include <assert.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <unistd.h>
 
 #include "3600fs.h"
 #include "disk.h"
@@ -46,6 +47,13 @@ void myformat(int size) {
     vcb_block->db_start = vcb_block->de_length+vcb_block->fat_length+1;
     printf("de_start %d\nde_length %d\nfat_start %d\nfat_length %d\ndb_start %d\n",vcb_block->de_start,vcb_block->de_length,vcb_block->fat_start,vcb_block->fat_length,vcb_block->db_start);
 
+	vcb_block->user = geteuid();
+	vcb_block->group = getegid();
+	struct timespec currentTime;
+	clock_gettime(CLOCK_REALTIME, &currentTime);
+	vcb_block->access_time = currentTime.tv_sec;
+	vcb_block->modify_time = currentTime.tv_sec;
+	vcb_block->create_time = currentTime.tv_sec;
      dwrite(place++, tmp);	
   	
     memset(tmp, 0, BLOCKSIZE); 
@@ -54,8 +62,8 @@ void myformat(int size) {
     
 
     int start = place; 
-    while(place<start+MAX_FILES)
-  	dwrite(place++,tmp);
+    while(place < start+MAX_FILES)
+  	dwrite(place++, tmp);
     
     start = place; 
     memset(tmp, 0, BLOCKSIZE); 

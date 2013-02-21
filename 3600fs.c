@@ -39,6 +39,7 @@
 #include "disk.h"
 
 vcb* vcBlock;
+dirent* dirEntry;
 
 /*
  * Initialize filesystem. Read in file system metadata and initialize
@@ -53,6 +54,7 @@ static void* vfs_mount(struct fuse_conn_info *conn) {
     fprintf(stderr, "vfs_mount called\n");
     dconnect();
     vcBlock = (vcb*)calloc(1, sizeof(vcb));
+    dirEntry = (dirent*)calloc(1, sizeof(dirent));
     dread(0, vcBlock);
     // Do not touch or move this code; connects the disk
     if(vcBlock->magic_number != MAGIC_NUMBER) { 
@@ -110,17 +112,29 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
 	dread(0, vcBlock);
 	if (vcBlock->de_length == 0) {
 		return -ENOENT;
+	}
+	if (!filename) {
+		stbuf->st_mode  = 0777 | S_IFDIR;
+    		stbuf->st_uid     = vcBlock->user;
+    		stbuf->st_gid     = vcBlock->group; 
+	    	stbuf->st_atime   = vcBlock->access_time;
+	    	stbuf->st_mtime   = vcBlock->modify_time;
+	   	stbuf->st_ctime   = vcBlock->create_time;
+	    	stbuf->st_size    = 0;
+	    	stbuf->st_blocks  = 0;
 	} else {
-		dirent* dirEntry = (dirent*)calloc(1, sizeof(dirent));
-		fprintf(stderr, "dirent allocated\n");
 		if (!dirEntry) {
 			return -1;
+		}
+		if (!filename) {
+			filename = ".";
+			fprintf(stderr, ".....");
 		}
 		int block = vcBlock->de_start;
 		char fileFound = 0;
 		while(block - vcBlock->de_start < vcBlock->de_length) {
 			dread(block, dirEntry);
-			if (strncmp(filename, dirEntry->name, strlen(filename)) == 0) {
+			if (dirEntry && strncmp(filename, dirEntry->name, strlen(filename)) == 0) {
 				fileFound = 1;
 				break;
 			} else {
@@ -130,7 +144,7 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
 		if (!fileFound) {
 			return -ENOENT;
 		} else {
-			stbuf->st_mode = 0777 | S_IFDIR;
+			stbuf->st_mode = 0777 | S_IFREG;
 			stbuf->st_uid = dirEntry->user;
 			stbuf->st_gid = dirEntry->group;
 			stbuf->st_atime = dirEntry->access_time;
@@ -139,23 +153,8 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
 			stbuf->st_size = dirEntry->size;
 			stbuf->st_size = dirEntry->size / BLOCKSIZE;
 		}
-		free(dirEntry);
 	}
-    /*
-    if (The path represents the root directory)
-      stbuf->st_mode  = 0777 | S_IFDIR;
-    else 
-      stbuf->st_mode  = <<file mode>> | S_IFREG;
-
-    stbuf->st_uid     = // file uid
-    stbuf->st_gid     = // file gid
-    stbuf->st_atime   = // access time 
-    stbuf->st_mtime   = // modify time
-    stbuf->st_ctime   = // create time
-    stbuf->st_size    = // file size
-    stbuf->st_blocks  = // file size in blocks
-      */
-	free(vcBlock);
+    
     	return 0;
 }
 
@@ -201,17 +200,16 @@ static int vfs_mkdir(const char *path, mode_t mode) {
 static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
                        off_t offset, struct fuse_file_info *fi)
 {
-/*	if (strncmp(path, "/", 1)) {
+	fprintf(stderr, "vfs_readdir called");
+	if (strncmp(path, "/", 1)) {
 		return -1;
 	} else {
-		vcb* vcBlock = (vcb*)calloc(1, sizeof(vcb));
 		if (!vcBlock) {
 			return -1;
 		}
 		dread(0, vcBlock);
 		dirent* dirEntry = (dirent*)calloc(1, sizeof(dirent));
 		if (!dirEntry) {
-			free(vcBlock);
 			return -1;
 		}
 		int block = vcBlock->de_start;
@@ -225,10 +223,8 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 				return 0;
 			}
 		}
-		free(vcBlock);
-		free(dirEntry);
 		return 0;
-	}*/return 0;
+	}
 }
 
 /*
@@ -240,16 +236,14 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
     	char* filename = strtok(path, "/");
 	
 	//only support root dir
-	if (strtok(NULL, "/")) {
+	if (strtok(NULL, "/") || !filename) {
 		return -1;
 	}
 
-	vcb* vcBlock = (vcb*)calloc(1, sizeof(vcb));
 	if (!vcBlock) {
 		return -1;
 	}
 	dread(0, vcBlock);
-	dirent* dirEntry = (dirent*)calloc(1, sizeof(dirent));
 	if (!dirEntry) {
 		return -1;
 	}
@@ -277,8 +271,6 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
 	dirEntry->modify_time = currentTime.tv_sec;
 	dirEntry->create_time = currentTime.tv_sec;
 
-	free(vcBlock);
-	free(dirEntry);
 	return 0;
 }
 
