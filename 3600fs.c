@@ -90,8 +90,9 @@ static void vfs_unmount (void *private_data) {
  */
 static int vfs_getattr(const char *path, struct stat *stbuf) {
     fprintf(stderr, "vfs_getattr called\n");
-
+   	
     // Do not mess with this code 
+
     stbuf->st_nlink = 1; // hard links
     stbuf->st_rdev  = 0;
     stbuf->st_blksize = BLOCKSIZE;
@@ -111,7 +112,9 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
 	if (vcBlock->de_length == 0) {
 		return -ENOENT;
 	} else {
-		dirent* dirEntry = (dirent*)calloc(1, sizeof(dirent));
+		//Broken Malloc
+		dirent dirEntry_s;
+		dirent* dirEntry = &dirEntry_s;
 		fprintf(stderr, "dirent allocated\n");
 		if (!dirEntry) {
 			return -1;
