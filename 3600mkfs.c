@@ -42,9 +42,9 @@ void myformat(int size) {
     vcb_block->de_start = 1;
     vcb_block->de_length = MAX_FILES;
     vcb_block->fat_start = vcb_block->de_length+1; 
-    vcb_block->fat_length = (size-MAX_FILES-1)/128;
+    vcb_block->fat_length = (size-MAX_FILES-1)/129;
     vcb_block->db_start = vcb_block->de_length+vcb_block->fat_length+1;
-    //printf("de_start %d\nde_length %d\nfat_start %d\nfat_length %d\ndb_start %d\n",vcb_block->de_start,vcb_block->de_length,vcb_block->fat_start,vcb_block->fat_length,vcb_block->db_start);
+    printf("de_start %d\nde_length %d\nfat_start %d\nfat_length %d\ndb_start %d\n",vcb_block->de_start,vcb_block->de_length,vcb_block->fat_start,vcb_block->fat_length,vcb_block->db_start);
 
      dwrite(place++, tmp);	
   	
