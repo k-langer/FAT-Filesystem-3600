@@ -345,14 +345,17 @@ static int vfs_delete(const char *path)
 	unsigned int i;	
 	dirent* dirEntry;
 	if ( strncmp(path, "/", 1) ) {
+		fprintf(stderr,"Directory is not valid!\n");
 		return -1;
 	} else {
 		if ( !vcBlock ) {
+			fprintf(stderr,"vcBlock is not valid!\n");
 			return -1;
 		}
 		dread(0, (char*) vcBlock);
 		dirEntry = (dirent*)calloc(1, sizeof(dirent));
 		if ( !dirEntry ) {
+			fprintf(stderr,"dirEntry is not valid!\n");
 			return -1;
 		}
 		
@@ -366,11 +369,10 @@ static int vfs_delete(const char *path)
 	
 	while (block - vcBlock->de_start < vcBlock->de_length) {
 		dread(block, (char*) dirEntry);
-		
 		for ( i = lastSlash+1; i < strlen( path ); i++) {
 			if ( path[i] != dirEntry->name[i-1] )
 				break;
-			if ( lastSlash+1 == strlen( path ) -1 ) {
+			if ( i+1 == strlen( path ) -1 ) {
 				memset(dirEntry,0,BLOCKSIZE);
 				dwrite(block, (char*) dirEntry);
 				return 0;
@@ -378,6 +380,7 @@ static int vfs_delete(const char *path)
 		}
 		block++;
 	}
+	fprintf(stderr,"File not found!\n");
 	return -1;
 }
 
