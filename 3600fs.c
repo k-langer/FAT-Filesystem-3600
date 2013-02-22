@@ -340,8 +340,45 @@ static int vfs_delete(const char *path)
 
   /* 3600: NOTE THAT THE BLOCKS CORRESPONDING TO THE FILE SHOULD BE MARKED
            AS FREE, AND YOU SHOULD MAKE THEM AVAILABLE TO BE USED WITH OTHER FILES */
-
-    return 0;
+    fprintf(stderr, "vfs_delete called on %s\n",path);
+	unsigned int lastSlash = 0; 
+	unsigned int i;	
+	dirent* dirEntry;
+	if ( strncmp(path, "/", 1) ) {
+		return -1;
+	} else {
+		if ( !vcBlock ) {
+			return -1;
+		}
+		dread(0, (char*) vcBlock);
+		dirEntry = (dirent*)calloc(1, sizeof(dirent));
+		if ( !dirEntry ) {
+			return -1;
+		}
+		
+		for (i = 0; i < strlen( path ); i++) {
+			if ( path[i] == '/' ) 
+				lastSlash = i;
+		}
+	}
+				
+	int block = vcBlock->de_start;
+	
+	while (block - vcBlock->de_start < vcBlock->de_length) {
+		dread(block, (char*) dirEntry);
+		
+		for ( i = lastSlash+1; i < strlen( path ); i++) {
+			if ( path[i] != dirEntry->name[i-1] )
+				break;
+			if ( lastSlash+1 == strlen( path ) -1 ) {
+				memset(dirEntry,0,BLOCKSIZE);
+				dwrite(block, (char*) dirEntry);
+				return 0;
+			}
+		}
+		block++;
+	}
+	return -1;
 }
 
 /*
