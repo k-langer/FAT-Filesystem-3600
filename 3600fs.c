@@ -345,17 +345,17 @@ static int vfs_delete(const char *path)
 	unsigned int i;	
 	dirent* dirEntry;
 	if ( strncmp(path, "/", 1) ) {
-		fprintf(stderr,"Directory is not valid!\n");
+		fprintf( stderr, "Directory is not valid!\n" );
 		return -1;
 	} else {
 		if ( !vcBlock ) {
-			fprintf(stderr,"vcBlock is not valid!\n");
+			fprintf( stderr, "vcBlock is not valid!\n" );
 			return -1;
 		}
 		dread(0, (char*) vcBlock);
-		dirEntry = (dirent*)calloc(1, sizeof(dirent));
+		dirEntry = (dirent*) calloc(1, sizeof( dirent ) );
 		if ( !dirEntry ) {
-			fprintf(stderr,"dirEntry is not valid!\n");
+			fprintf( stderr, "dirEntry is not valid!\n" );
 			return -1;
 		}
 		
@@ -367,20 +367,20 @@ static int vfs_delete(const char *path)
 				
 	int block = vcBlock->de_start;
 	
-	while (block - vcBlock->de_start < vcBlock->de_length) {
+	while ( block - vcBlock->de_start < vcBlock->de_length ) {
 		dread(block, (char*) dirEntry);
-		for ( i = lastSlash+1; i < strlen( path ); i++) {
+		for ( i = lastSlash+1; i < strlen( path ); i++ ) {
 			if ( path[i] != dirEntry->name[i-1] )
 				break;
 			if ( i == strlen( path ) -1 ) {
-				memset(dirEntry,0,BLOCKSIZE);
-				dwrite(block, (char*) dirEntry);
+				memset( dirEntry, 0 , BLOCKSIZE );
+				dwrite( block, (char*) dirEntry );
 				return 0;
 			}
 		}
 		block++;
 	}
-	fprintf(stderr,"File not found!\n");
+	fprintf( stderr, "File not found!\n" );
 	return -1;
 }
 
@@ -393,8 +393,46 @@ static int vfs_delete(const char *path)
  */
 static int vfs_rename(const char *from, const char *to)
 {
-
-    return 0;
+	fprintf( stderr, "vfs_rename called from %s to %s\n",from,to );	
+	dirent*dirEntry;
+	if ( strncmp(from, "/", 1) ) {
+		fprintf( stderr, "Directory is not valid!\n" );
+		return -1;
+	} else {
+		if ( !vcBlock ) {
+			fprintf( stderr, "vcBlock is not valid!\n" );
+			return -1;
+		}
+		dread(0, (char*) vcBlock);
+		dirEntry = (dirent*) calloc(1, sizeof( dirent ) );
+		if ( !dirEntry ) {
+			fprintf( stderr, "dirEntry is not valid!\n" );
+			return -1;
+		}	
+	}
+	/*
+		Bug, will allow for two files with the same name. 
+	*/
+	int block = vcBlock->de_start;
+	unsigned int i;
+	while ( block - vcBlock->de_start < vcBlock->de_length ) {
+		dread(block, (char*) dirEntry);
+		for ( i = 1; i < strlen( from ); i++ ) {
+			if ( from[i] != dirEntry->name[i-1] )
+				break;
+			if ( i == strlen( from ) -1 ) {
+				memset( dirEntry->name, 0 , sizeof( dirEntry->name) );
+				for (i = 1; i < strlen( to ); i++)
+					dirEntry->name[i-1] = to[i];
+				dwrite( block, (char*) dirEntry );
+				return 0;
+			}
+		}
+		block++;
+	}
+	fprintf( stderr, "File not found!\n" );
+	return -1;
+	    return 0;
 }
 
 
