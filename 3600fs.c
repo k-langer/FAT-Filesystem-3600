@@ -372,7 +372,7 @@ static int vfs_delete(const char *path)
 		for ( i = lastSlash+1; i < strlen( path ); i++) {
 			if ( path[i] != dirEntry->name[i-1] )
 				break;
-			if ( i+1 == strlen( path ) -1 ) {
+			if ( i == strlen( path ) -1 ) {
 				memset(dirEntry,0,BLOCKSIZE);
 				dwrite(block, (char*) dirEntry);
 				return 0;
