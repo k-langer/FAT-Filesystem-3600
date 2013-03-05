@@ -498,7 +498,45 @@ static int vfs_chmod(const char *file, mode_t mode)
  */
 static int vfs_chown(const char *file, uid_t uid, gid_t gid)
 {
-	return 0;
+	   fprintf( stderr, "vfs_chown called on %s with %d %d\n", file , uid , gid );	
+	dirent*dirEntry;
+	if ( strncmp(file, "/", 1) ) {
+		fprintf( stderr, "Directory is not valid!\n" );
+		return -1;
+	} else {
+		if ( !vcBlock ) {
+			fprintf( stderr, "vcBlock is not valid!\n" );
+			return -1;
+		}
+		dread(0, (char*) vcBlock);
+		dirEntry = (dirent*) calloc(1, sizeof( dirent ) );
+		if ( !dirEntry ) {
+			fprintf( stderr, "dirEntry is not valid!\n" );
+			return -1;
+		}	
+	}
+	int block = vcBlock->de_start;
+	unsigned int i;
+	while ( block - vcBlock->de_start < vcBlock->de_length ) {
+		dread(block, (char*) dirEntry);
+		for ( i = 1; i < strlen( file ); i++ ) {
+			if ( file[i] != dirEntry->name[i-1] )
+				break;
+			if ( i == strlen( file ) -1 ) {
+                if ( uid != -1 ) {
+                    dirEntry->user = uid;
+                }
+                if ( gid != -1 ) {
+                    dirEntry->group = gid;
+                }
+				dwrite( block, (char*) dirEntry );
+				return 0;
+			}
+		}
+		block++;
+	}
+	fprintf( stderr, "File not found!\n" );
+	return -1;
 }
 
 /*
