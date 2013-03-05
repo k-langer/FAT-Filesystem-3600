@@ -145,7 +145,7 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
 		if (!fileFound) {
 			return -ENOENT;
 		} else {
-			stbuf->st_mode = 0777 | S_IFREG;
+			stbuf->st_mode = dirEntry->mode;
 			stbuf->st_uid = dirEntry->user;
 			stbuf->st_gid = dirEntry->group;
 			stbuf->st_atime = dirEntry->access_time;
@@ -410,13 +410,22 @@ static int vfs_rename(const char *from, const char *to)
 			return -1;
 		}	
 	}
-	/*
-		Bug, will allow for two files with the same name. 
-	*/
 	int block = vcBlock->de_start;
 	unsigned int i;
 	while ( block - vcBlock->de_start < vcBlock->de_length ) {
 		dread(block, (char*) dirEntry);
+		fprintf( stderr, "to: %s cmp: %s\n",to,dirEntry->name);
+		/*
+        //TODO Fix duplicate name files on rename
+        for ( i = 1; i < strlen( to ); i++ ) {
+		    if ( to[i] != dirEntry->name[i-1] || strlen( dirEntry->name ) != strlen( to ) -1 ) {
+			    break; 		
+		    } 
+            if ( i == strlen( to ) ){
+		        return -EEXIST;
+            }
+		}
+        */
 		for ( i = 1; i < strlen( from ); i++ ) {
 			if ( from[i] != dirEntry->name[i-1] )
 				break;
@@ -432,7 +441,6 @@ static int vfs_rename(const char *from, const char *to)
 	}
 	fprintf( stderr, "File not found!\n" );
 	return -1;
-	    return 0;
 }
 
 
@@ -447,8 +455,40 @@ static int vfs_rename(const char *from, const char *to)
  */
 static int vfs_chmod(const char *file, mode_t mode)
 {
-
-    return 0;
+    fprintf( stderr, "vfs_chmod called on %s with %o\n",file,mode );	
+	dirent*dirEntry;
+	if ( strncmp(file, "/", 1) ) {
+		fprintf( stderr, "Directory is not valid!\n" );
+		return -1;
+	} else {
+		if ( !vcBlock ) {
+			fprintf( stderr, "vcBlock is not valid!\n" );
+			return -1;
+		}
+		dread(0, (char*) vcBlock);
+		dirEntry = (dirent*) calloc(1, sizeof( dirent ) );
+		if ( !dirEntry ) {
+			fprintf( stderr, "dirEntry is not valid!\n" );
+			return -1;
+		}	
+	}
+	int block = vcBlock->de_start;
+	unsigned int i;
+	while ( block - vcBlock->de_start < vcBlock->de_length ) {
+		dread(block, (char*) dirEntry);
+		for ( i = 1; i < strlen( file ); i++ ) {
+			if ( file[i] != dirEntry->name[i-1] )
+				break;
+			if ( i == strlen( file ) -1 ) {
+                dirEntry->mode = mode;
+				dwrite( block, (char*) dirEntry );
+				return 0;
+			}
+		}
+		block++;
+	}
+	fprintf( stderr, "File not found!\n" );
+	return -1;
 }
 
 /*
@@ -458,8 +498,7 @@ static int vfs_chmod(const char *file, mode_t mode)
  */
 static int vfs_chown(const char *file, uid_t uid, gid_t gid)
 {
-
-    return 0;
+	return 0;
 }
 
 /*
@@ -468,8 +507,7 @@ static int vfs_chown(const char *file, uid_t uid, gid_t gid)
  */
 static int vfs_utimens(const char *file, const struct timespec ts[2])
 {
-
-    return 0;
+	return 0;
 }
 
 /*
@@ -479,11 +517,10 @@ static int vfs_utimens(const char *file, const struct timespec ts[2])
  */
 static int vfs_truncate(const char *file, off_t offset)
 {
-
-  /* 3600: NOTE THAT ANY BLOCKS FREED BY THIS OPERATION SHOULD
+	/* 3600: NOTE THAT ANY BLOCKS FREED BY THIS OPERATION SHOULD
            BE AVAILABLE FOR OTHER FILES TO USE. */
-
-    return 0;
+	
+	return 0;
 }
 
 
