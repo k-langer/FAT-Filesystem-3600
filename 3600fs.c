@@ -156,7 +156,7 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
 			stbuf->st_mtime = dirEntry->modify_time;
 			stbuf->st_ctime = dirEntry->create_time;
 			stbuf->st_size = dirEntry->size;
-			stbuf->st_size = dirEntry->size / BLOCKSIZE;
+			stbuf->st_blocks = dirEntry->size / BLOCKSIZE;
 		}
 	}
     
@@ -333,8 +333,10 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
 		}
 		dread(vcBlock->db_start + data_block_num, data_block);
 		memcpy(buf, data_block, size);
+		char* eof = strchr(buf, EOF);
+		*eof = 0;
 	}
-	return BLOCKSIZE;
+	return strlen(buf);
 }
 
 /*
@@ -366,7 +368,7 @@ static int vfs_write(const char *path, const char *buf, size_t size,
 	} else {
 		int data_block_num = -1;
 		if (dirEntry->valid) {
-			data_block_num = dirEntry->first_block + (BLOCKSIZE / dirEntry->size);
+			data_block_num = dirEntry->first_block;
 		} else {
 			data_block_num = find_free_block();
 		}
@@ -380,6 +382,7 @@ static int vfs_write(const char *path, const char *buf, size_t size,
 		char* data_block = (char*)calloc(BLOCKSIZE, sizeof(char));
 		dread(vcBlock->db_start + data_block_num, data_block);
 		memcpy(data_block + byte_offset, buf, size);
+		*(data_block + byte_offset + size) = EOF;
 		dwrite(vcBlock->db_start + data_block_num, data_block);
 
 		int fatent_block_num = data_block_num / FATENTS_PER_BLOCK;
@@ -396,14 +399,14 @@ static int vfs_write(const char *path, const char *buf, size_t size,
 
 		dirEntry->first_block = data_block_num;
 		dirEntry->valid = 1;
-		dirEntry->size = BLOCKSIZE;
+		dirEntry->size = size;
 		struct timespec currentTime;
 		clock_gettime(CLOCK_REALTIME, &currentTime);
 		dirEntry->modify_time = currentTime.tv_sec;
 		dwrite(block, dirEntry);
 	}
 	free(dirEntry);
-    return size;
+    	return size;
 }
 
 /**
