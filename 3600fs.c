@@ -356,22 +356,46 @@ static int vfs_write(const char *path, const char *buf, size_t size,
 	if (!found) {
 		return -1;
 	} else {
-		int block_offset = -1;
+		int data_block_num = -1;
 		if (dirEntry->valid) {
-			block_offset = dirEntry->first_block + (BLOCKSIZE / dirEntry->size);
+			data_block_num = dirEntry->first_block + (BLOCKSIZE / dirEntry->size);
 		} else {
-			block_offset = find_free_block();
+			data_block_num = find_free_block();
 		}
-		if (block_offset = -1 || block_offset >= fat_length) {
+		if (data_block_num == -1 || data_block_num >= (vcBlock->fat_length * FATENTS_PER_BLOCK)) {
 			return -ENOSPC;
 		}
-		int byte_offset = BLOCKSIZE % dirEntry->size;
+		int byte_offset = 0;
+		if (dirEntry->size) {
+			byte_offset = BLOCKSIZE % dirEntry->size;
+		}
 		char* data_block = (char*)calloc(BLOCKSIZE, sizeof(char));
-		dread(vcBlock->db_start + block_offset, data_block);
+		dread(vcBlock->db_start + data_block_num, data_block);
 		memcpy(data_block + byte_offset, buf, size);
-		dwrite(vcBlock->db_start + block_offset, data_block);
+		dwrite(vcBlock->db_start + data_block_num, data_block);
+
+		int fatent_block_num = data_block_num / FATENTS_PER_BLOCK;
+		int fatent_block_offset = data_block_num % FATENTS_PER_BLOCK;
+		dread(vcBlock->fat_start + fatent_block_num, data_block);
+		fatent* fatEntry = (fatent*)calloc(1, sizeof(fatent));
+		memcpy(data_block + fatent_block_offset * sizeof(fatent), fatEntry, sizeof(fatent));
+		fatEntry->used = 1;
+		fatEntry->eof = 1;
+		memcpy(fatEntry, data_block + fatent_block_offset, sizeof(fatent));
+		dwrite(vcBlock->fat_start + fatent_block_num, data_block);
+		free(fatEntry);
+		free(data_block);
+
+		dirEntry->first_block = data_block_num;
+		dirEntry->valid = 1;
+		dirEntry->size = BLOCKSIZE;
+		struct timespec currentTime;
+		clock_gettime(CLOCK_REALTIME, &currentTime);
+		dirEntry->modify_time = currentTime.tv_sec;
+		dwrite(block, dirEntry);
 	}
-    return 0;
+	free(dirEntry);
+    	return size;
 }
 
 /**
