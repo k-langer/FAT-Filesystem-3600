@@ -40,7 +40,11 @@
 
 vcb* vcBlock;
 
+//returns data block number of 'first' free block
 static int find_free_block();
+
+//returns dirent number matching path and pointer to dirent, returns -1 if not found
+static int find_dirent(const char* path, dirent* dirEntry);
 
 /*
  * Initialize filesystem. Read in file system metadata and initialize
@@ -327,33 +331,13 @@ static int vfs_write(const char *path, const char *buf, size_t size,
 
   /* 3600: NOTE THAT IF THE OFFSET+SIZE GOES OFF THE END OF THE FILE, YOU
            MAY HAVE TO EXTEND THE FILE (ALLOCATE MORE BLOCKS TO IT). */
-	char* filename = strtok(path, "/");	
-	//only support root dir
-	if (strtok(NULL, "/") || !filename) {
-		return -1;
-	}
-
-	if (!vcBlock) {
-		return -1;
-	}
-	dread(0, vcBlock);
+	
 	dirent* dirEntry = (dirent*)calloc(1, sizeof(dirent));
 	if (!dirEntry) {
 		return -1;
 	}
-	char found = 0;
-	int block = vcBlock->de_start;
-	while(block - vcBlock->de_start < vcBlock->de_length) {
-		dread(block, dirEntry);
-		if (strncmp(filename, dirEntry->name, strlen(filename)) == 0) {
-			found = 1;
-			break;
-		} else {
-			block++;
-		}
-	}
 
-	if (!found) {
+	if (find_dirent(path, dirEntry) == -1) {
 		return -1;
 	} else {
 		int data_block_num = -1;
@@ -395,7 +379,7 @@ static int vfs_write(const char *path, const char *buf, size_t size,
 		dwrite(block, dirEntry);
 	}
 	free(dirEntry);
-    	return size;
+    return size;
 }
 
 /**
@@ -680,6 +664,35 @@ static int find_free_block() {
 	} else {
 		free(fatEntry);
 		return fatent_offset;
+	}
+}
+
+static int find_dirent(const char* path, dirent* dirEntry) {
+	char* filename = strtok(path, "/");	
+	//only support root dir
+	if (strtok(NULL, "/") || !filename) {
+		return -1;
+	}
+
+	if (!vcBlock || !dirEntry) {
+		return -1;
+	}
+	dread(0, vcBlock);
+	char found = 0;
+	int block = vcBlock->de_start;
+	while(block - vcBlock->de_start < vcBlock->de_length) {
+		dread(block, dirEntry);
+		if (strncmp(filename, dirEntry->name, strlen(filename)) == 0) {
+			found = 1;
+			break;
+		} else {
+			block++;
+		}
+	}
+	if (found) {
+		return block;
+	} else {
+		return -1;
 	}
 }
 
