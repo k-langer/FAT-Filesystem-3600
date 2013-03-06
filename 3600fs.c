@@ -96,8 +96,6 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
     stbuf->st_nlink = 1; // hard links
     stbuf->st_rdev  = 0;
     stbuf->st_blksize = BLOCKSIZE;
-
-    /* 3600: YOU MUST UNCOMMENT BELOW AND IMPLEMENT THIS CORRECTLY */
    
 	//find the file first
 	char* filename = strtok(path, "/");
@@ -327,7 +325,42 @@ static int vfs_write(const char *path, const char *buf, size_t size,
 
   /* 3600: NOTE THAT IF THE OFFSET+SIZE GOES OFF THE END OF THE FILE, YOU
            MAY HAVE TO EXTEND THE FILE (ALLOCATE MORE BLOCKS TO IT). */
+	char* filename = strtok(path, "/");	
+	//only support root dir
+	if (strtok(NULL, "/") || !filename) {
+		return -1;
+	}
 
+	if (!vcBlock) {
+		return -1;
+	}
+	dread(0, vcBlock);
+	dirent* dirEntry = (dirent*)calloc(1, sizeof(dirent));
+	if (!dirEntry) {
+		return -1;
+	}
+	char found = 0;
+	int block = vcBlock->de_start;
+	while(block - vcBlock->de_start < vcBlock->de_length) {
+		dread(block, dirEntry);
+		if (strncmp(filename, dirEntry->name, strlen(filename)) == 0) {
+			found = 1;
+			break;
+		} else {
+			block++;
+		}
+	}
+
+	if (!found) {
+		return -1;
+	} else {
+		int block_offset = -1;
+		if (dirEntry->valid) {
+			block_offset = dirEntry->first_block + (BLOCKSIZE / dirEntry->size);
+		} else {
+			block_offset = find_free_block();
+		}
+	}
     return 0;
 }
 
@@ -585,6 +618,36 @@ static struct fuse_operations vfs_oper = {
     .utimens	 = vfs_utimens,
     .truncate	 = vfs_truncate,
 };
+
+static int find_free_block() {
+	if (!vcBlock) {
+		return -1;
+	}
+
+	int fatent_offset = 0;
+	int block_offset = 0;
+	char* tempBlock = (char*) calloc(512, sizeof(char));
+	dread(vcBlock->fat_start, tempBlock);
+	fatent* fatEntry = (fatent*) calloc(1, sizeof(fatent));
+	memcpy(fatEntry, tempBlock, sizeof(fatent));
+
+	while(fatEntry->used) {
+		fatent_offset++;
+		if (fatent_offset % FATENTS_PER_BLOCK = 0) {
+			block_offset++;
+			dread(vcBlock->fat_start + block_offset, tempBlock);
+		}
+		memcpy(fatEntry, tempBlock + (fatent_offset % FATENTS_PER_BLOCK) * sizeof(fatent), sizeof(fatent));
+	}
+	free(tempBlock)
+	if (fatEntry->used) {
+		free(fatEntry);
+		return -1;
+	} else {
+		free(fatEntry);
+		return fatent_offset;
+	}
+}
 
 int main(int argc, char *argv[]) {
     /* Do not modify this function */

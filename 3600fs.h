@@ -46,6 +46,7 @@ typedef struct dirent_s
 
 
 //32 bits
+#define FATENTS_PER_BLOCK 16
 typedef struct fatent_s
 {
 	unsigned int used:1;
