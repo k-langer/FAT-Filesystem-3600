@@ -40,6 +40,8 @@
 
 vcb* vcBlock;
 
+static int find_free_block();
+
 /*
  * Initialize filesystem. Read in file system metadata and initialize
  * memory structures. If there are inconsistencies, now would also be
@@ -633,13 +635,13 @@ static int find_free_block() {
 
 	while(fatEntry->used) {
 		fatent_offset++;
-		if (fatent_offset % FATENTS_PER_BLOCK = 0) {
+		if (fatent_offset % FATENTS_PER_BLOCK == 0) {
 			block_offset++;
 			dread(vcBlock->fat_start + block_offset, tempBlock);
 		}
 		memcpy(fatEntry, tempBlock + (fatent_offset % FATENTS_PER_BLOCK) * sizeof(fatent), sizeof(fatent));
 	}
-	free(tempBlock)
+	free(tempBlock);
 	if (fatEntry->used) {
 		free(fatEntry);
 		return -1;
