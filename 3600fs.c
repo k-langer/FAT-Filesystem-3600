@@ -362,6 +362,14 @@ static int vfs_write(const char *path, const char *buf, size_t size,
 		} else {
 			block_offset = find_free_block();
 		}
+		if (block_offset = -1 || block_offset >= fat_length) {
+			return -ENOSPC;
+		}
+		int byte_offset = BLOCKSIZE % dirEntry->size;
+		char* data_block = (char*)calloc(BLOCKSIZE, sizeof(char));
+		dread(vcBlock->db_start + block_offset, data_block);
+		memcpy(data_block + byte_offset, buf, size);
+		dwrite(vcBlock->db_start + block_offset, data_block);
 	}
     return 0;
 }
