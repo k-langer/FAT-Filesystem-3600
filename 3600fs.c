@@ -358,10 +358,7 @@ static int vfs_write(const char *path, const char *buf, size_t size,
 		if (data_block_num == -1 || data_block_num >= (vcBlock->fat_length * FATENTS_PER_BLOCK)) {
 			return -ENOSPC;
 		}
-		int byte_offset = 0;
-		if (dirEntry->size) {
-			byte_offset = BLOCKSIZE % dirEntry->size;
-		}
+		int byte_offset = offset;
 		char* data_block = (char*)calloc(BLOCKSIZE, sizeof(char));
 		dread(vcBlock->db_start + data_block_num, data_block);
 		memcpy(data_block + byte_offset, buf, size);
@@ -382,7 +379,7 @@ static int vfs_write(const char *path, const char *buf, size_t size,
 
 		dirEntry->first_block = data_block_num;
 		dirEntry->valid = 1;
-		dirEntry->size = size;
+		dirEntry->size = size + offset;
 		struct timespec currentTime;
 		clock_gettime(CLOCK_REALTIME, &currentTime);
 		dirEntry->modify_time = currentTime.tv_sec;
