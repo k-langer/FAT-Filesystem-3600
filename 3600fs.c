@@ -126,8 +126,7 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
 	    	stbuf->st_size    = 0;
 	    	stbuf->st_blocks  = 0;
 	} else {
-		dirent dirEntry_s;
-		dirent* dirEntry = &dirEntry_s;
+		dirent* dirEntry = (dirent*)calloc(1, sizeof(dirent));
 		if (!dirEntry) {
 			return -1;
 		}
@@ -135,18 +134,8 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
 			filename = ".";
 			fprintf(stderr, ".....");
 		}
-		int block = vcBlock->de_start;
-		char fileFound = 0;
-		while(block - vcBlock->de_start < vcBlock->de_length) {
-			dread(block, dirEntry);
-			if (dirEntry && strncmp(filename, dirEntry->name, strlen(filename)) == 0) {
-				fileFound = 1;
-				break;
-			} else {
-				block++;
-			}
-		}
-		if (!fileFound) {
+		int block = find_dirent(path, dirEntry);
+		if (block == -1) {
 			return -ENOENT;
 		} else {
 			stbuf->st_mode = dirEntry->mode;
@@ -160,7 +149,7 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
 		}
 	}
     
-    	return 0;
+    return 0;
 }
 
 /*
@@ -221,7 +210,6 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 		while (block - vcBlock->de_start < vcBlock->de_length) {
 			dread(block, dirEntry);
 			if (dirEntry->create_time) {
-				fprintf(stderr,"ahh! why\n");
 				if (!filler(buf, dirEntry->name, NULL, block)) {
 					return 0;
 				}
@@ -254,14 +242,9 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
 		return -1;
 	}
 
-	int block = vcBlock->de_start;
-	while(block - vcBlock->de_start < vcBlock->de_length) {
-		dread(block, dirEntry);
-		if (strncmp(filename, dirEntry->name, strlen(filename)) == 0) {
-			return -EEXIST;
-		} else {
-			block++;
-		}
+	int block = find_dirent(path, dirEntry);
+	if (block != -1) {
+		return -EEXIST;
 	}
 
 	char foundEmpty = 0;
