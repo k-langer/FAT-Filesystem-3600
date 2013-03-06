@@ -310,8 +310,31 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
 static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
                     struct fuse_file_info *fi)
 {
+	dirent* dirEntry = (dirent*)calloc(1, sizeof(dirent));
+	if (!dirEntry) {
+		return -1;
+	}
 
-    return 0;
+	int block = find_dirent(path, dirEntry);
+	if (block == -1) {
+		return -1;
+	} else {
+		if (!vcBlock) {
+			return -1;
+		}
+		dread(0, vcBlock);
+		if (!dirEntry->valid) {
+			return 0;
+		}
+		int data_block_num = dirEntry->first_block;
+		char* data_block = (char*)calloc(BLOCKSIZE, sizeof(char));
+		if (!data_block) {
+			return -1;
+		}
+		dread(vcBlock->db_start + data_block_num, data_block);
+		memcpy(buf, data_block, size);
+	}
+	return BLOCKSIZE;
 }
 
 /*
@@ -336,8 +359,9 @@ static int vfs_write(const char *path, const char *buf, size_t size,
 	if (!dirEntry) {
 		return -1;
 	}
-
-	if (find_dirent(path, dirEntry) == -1) {
+	int block = find_dirent(path, dirEntry);
+	
+	if (block == -1) {
 		return -1;
 	} else {
 		int data_block_num = -1;
