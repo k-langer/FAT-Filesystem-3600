@@ -385,7 +385,7 @@ static int vfs_write(const char *path, const char *buf, size_t size,
 	    int fatent_block_num = data_block_num / FATENTS_PER_BLOCK;
 	    int fatent_block_offset = data_block_num % FATENTS_PER_BLOCK;
 	    dread(vcBlock->fat_start + fatent_block_num, data_block);
-	    memcpy(data_block + fatent_block_offset * sizeof(fatent), fatEntry, sizeof(fatent));
+	    //memcpy(data_block + fatent_block_offset * sizeof(fatent), fatEntry, sizeof(fatent));  
         fat_count++; 	    
         fatEntry->used = 1;
 	    fatEntry->eof = 1;
@@ -395,7 +395,8 @@ static int vfs_write(const char *path, const char *buf, size_t size,
             data_block_num = find_free_block();
         }
         fatEntry->next =data_block;
-        memcpy(fatEntry, data_block + fatent_block_offset, sizeof(fatent));
+        memcpy(data_block + fatent_block_offset, fatEntry, sizeof(fatent));
+        //memcpy(fatEntry, data_block + fatent_block_offset, sizeof(fatent));
 	    dwrite(vcBlock->fat_start + fatent_block_num, data_block);
         memset(fatEntry,0,sizeof(fatEntry));
         memset(data_block,0,sizeof(data_block));          
@@ -663,17 +664,31 @@ static struct fuse_operations vfs_oper = {
 };
 
 static int find_free_block() {
+    fprintf(stderr,"HERE\n");
 	if (!vcBlock) {
 		return -1;
 	}
-
+    fatent* fatList = (fatent*) calloc(512,sizeof(char));
+    dread(vcBlock->fat_start,fatList);
+    int fatent_offset = 0;
+    int block_offset = 0;    
+    while (fatList[fatent_offset % FATENTS_PER_BLOCK].used) {
+        fatent_offset++;
+        if ( fatent_offset % FATENTS_PER_BLOCK == 0 ) {
+            block_offset++;
+            dread(vcBlock->fat_start + block_offset, fatList);
+        }
+    }
+    free( fatList );
+    return fatent_offset;
+    /*
 	int fatent_offset = 0;
 	int block_offset = 0;
 	char* tempBlock = (char*) calloc(512, sizeof(char));
 	dread(vcBlock->fat_start, tempBlock);
 	fatent* fatEntry = (fatent*) calloc(1, sizeof(fatent));
 	memcpy(fatEntry, tempBlock, sizeof(fatent));
-
+    fprintf(stderr,"used: %d\n",((fatent*)tempBlock)->used);
 	while(fatEntry->used) {
 		fatent_offset++;
 		if (fatent_offset % FATENTS_PER_BLOCK == 0) {
@@ -690,6 +705,7 @@ static int find_free_block() {
 		free(fatEntry);
 		return fatent_offset;
 	}
+    */
 }
 
 static int find_dirent(const char* path, dirent* dirEntry) {
