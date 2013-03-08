@@ -475,7 +475,9 @@ static int vfs_delete(const char *path)
 			if ( path[i] != dirEntry->name[i-1] )
 				break;
 			if ( i == strlen( path ) -1 ) {
+                
                 if ( dirEntry->valid) {
+                    
                     int data_block_num = dirEntry->first_block;
                     fatent* fat_block = (fatent*)calloc(BLOCKSIZE, sizeof(char));
                     if (!fat_block) {
@@ -495,6 +497,7 @@ static int vfs_delete(const char *path)
                         dwrite(vcBlock->fat_start + fatent_block_num,fat_block);
                     }	
                 }
+                
 				memset( dirEntry, 0 , BLOCKSIZE );
 				dwrite( block, (char*) dirEntry );
 				return 0;
@@ -667,6 +670,7 @@ static int vfs_chown(const char *file, uid_t uid, gid_t gid)
  */
 static int vfs_utimens(const char *file, const struct timespec ts[2])
 {
+    fprintf(stderr,"vfs_utimens called on file %s to update to current time\n",file);
 	return 0;
 }
 
@@ -679,6 +683,7 @@ static int vfs_truncate(const char *file, off_t offset)
 {
 	/* 3600: NOTE THAT ANY BLOCKS FREED BY THIS OPERATION SHOULD
            BE AVAILABLE FOR OTHER FILES TO USE. */
+    fprintf(stderr,"vfs_truncate called on file %s for offset %d\n",file,offset);
 	
 	return 0;
 }
