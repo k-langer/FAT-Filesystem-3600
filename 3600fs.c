@@ -348,7 +348,6 @@ static int vfs_write(const char *path, const char *buf, size_t size,
 	int block = find_dirent(path, dirEntry);
 	int fat_count; 
     int fats;
-    int last_data_block = 0;
     fatent* fatEntry = (fatent*)calloc(1, sizeof(fatent));
     char* data_block = (char*)calloc(BLOCKSIZE, sizeof(char));
     if (block == -1) {
@@ -362,10 +361,17 @@ static int vfs_write(const char *path, const char *buf, size_t size,
     if (data_block_num == -1 || data_block_num >= (vcBlock->fat_length * FATENTS_PER_BLOCK)) {
 	    return -ENOSPC;
     }
+    dirEntry->first_block = data_block_num;
+	dirEntry->valid = 1;
+	dirEntry->size = size + offset;
+	struct timespec currentTime;
+	clock_gettime(CLOCK_REALTIME, &currentTime);
+	dirEntry->modify_time = currentTime.tv_sec;
     fat_count = 0; 
     fats = (size+offset)/BLOCKSIZE + 1;
     int cpy_size = 0;
-    while (1) {     
+    while (fat_count < fats) { 
+        fprintf(stderr,"Fatcount: %d\nData block: %d\n",fat_count,data_block_num);    
 	    int byte_offset = offset;
 	    dread(vcBlock->db_start + data_block_num, data_block);	   
         if (fat_count == fats-1) {
@@ -380,23 +386,20 @@ static int vfs_write(const char *path, const char *buf, size_t size,
 	    int fatent_block_offset = data_block_num % FATENTS_PER_BLOCK;
 	    dread(vcBlock->fat_start + fatent_block_num, data_block);
 	    memcpy(data_block + fatent_block_offset * sizeof(fatent), fatEntry, sizeof(fatent));
-	    fatEntry->used = 1;
+        fat_count++; 	    
+        fatEntry->used = 1;
 	    fatEntry->eof = 1;
-	    memcpy(fatEntry, data_block + fatent_block_offset, sizeof(fatent));
-	    dwrite(vcBlock->fat_start + fatent_block_num, data_block);
-        fat_count++; 
-        if ( fat_count >= fats) {         
-            break; 
+        if ( fat_count >= fats ) {
+            data_block_num = -1;
+        } else {
+            data_block_num = find_free_block();
         }
-        last_data_block = data_block_num;
-        data_block_num = find_free_block();           
-    }      
-	dirEntry->first_block = data_block_num;
-	dirEntry->valid = 1;
-	dirEntry->size = size + offset;
-	struct timespec currentTime;
-	clock_gettime(CLOCK_REALTIME, &currentTime);
-	dirEntry->modify_time = currentTime.tv_sec;
+        fatEntry->next =data_block;
+        memcpy(fatEntry, data_block + fatent_block_offset, sizeof(fatent));
+	    dwrite(vcBlock->fat_start + fatent_block_num, data_block);
+        memset(fatEntry,0,sizeof(fatEntry));
+        memset(data_block,0,sizeof(data_block));          
+    }     
 	dwrite(block, dirEntry);
     free(dirEntry);
     free(fatEntry);
