@@ -475,7 +475,7 @@ static int vfs_delete(const char *path)
 			if ( path[i] != dirEntry->name[i-1] )
 				break;
 			if ( i == strlen( path ) -1 ) {
-                if ( dirEntry->first_block) {
+                if ( dirEntry->valid) {
                     int data_block_num = dirEntry->first_block;
                     fatent* fat_block = (fatent*)calloc(BLOCKSIZE, sizeof(char));
                     if (!fat_block) {
