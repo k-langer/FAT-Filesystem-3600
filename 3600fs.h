@@ -15,6 +15,7 @@ typedef struct VCB_s {
 	int fat_start;
 	int fat_length;
 	int db_start;
+	int total_size;
 
 	//root metadata
 	uid_t user;
@@ -24,7 +25,7 @@ typedef struct VCB_s {
 	int modify_time;
 	int create_time;
 
-	BYTE extra[460];
+	BYTE extra[456];
 } vcb;
 
 //64 bytes 512/64=8
