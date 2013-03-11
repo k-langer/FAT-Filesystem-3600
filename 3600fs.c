@@ -344,7 +344,9 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
     }	
     eof_char = strchr(buf, EOF);
 	*eof_char = 0;
-	
+	free(data_block);
+    free(fat_block);
+    free(dirEntry);
 	return strlen(buf);    
 }
 
