@@ -330,12 +330,13 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
     int count = 0;
     int fatent_block_num;
 	int fatent_block_offset;
+   
     while (!eof)
     {
         fatent_block_num = data_block_num / FATENTS_PER_BLOCK;
         fatent_block_offset = data_block_num % FATENTS_PER_BLOCK;
 	    dread(vcBlock->fat_start + fatent_block_num, fat_block);  
-	    dread(vcBlock->db_start + data_block_num, data_block);    
+	    dread(vcBlock->db_start + data_block_num, data_block); 
         memcpy(buf+count*BLOCKSIZE, data_block, BLOCKSIZE);
         eof = fat_block[fatent_block_offset].eof;
         data_block_num = fat_block[fatent_block_offset].next;
@@ -714,9 +715,8 @@ static int vfs_truncate(const char *file, off_t offset)
     if ( dirEntry-> size < offset)
         return -1;
     dirEntry-> size = offset;
-    dwrite(block,dirEntry);
-    
     int data_block_num = dirEntry->first_block;
+    dwrite(block,dirEntry);
     char* eof_char;
     char* data_block = (char*)calloc(BLOCKSIZE, sizeof(char));
     if (!data_block) {
@@ -737,15 +737,17 @@ static int vfs_truncate(const char *file, off_t offset)
 	    dread(vcBlock->fat_start + fatent_block_num, fat_block);  
 	    dread(vcBlock->db_start + data_block_num, data_block); 
         eof = fat_block[fatent_block_offset].eof;
-        data_block_num = fat_block[fatent_block_offset].next;
-        if (count == offset/BLOCKSIZE) {   
-            data_block[offset%BLOCKSIZE] = 'EOF';
+        if (count == offset/BLOCKSIZE) { 
+            *(data_block+offset%BLOCKSIZE) = EOF;
+            fat_block->eof = 1;
+            dwrite(vcBlock->fat_start + fatent_block_num, fat_block);  
             dwrite(vcBlock->db_start + data_block_num, data_block);
         }
         if (count > offset/BLOCKSIZE || offset == 0) {
             memset( fat_block+fatent_block_offset, 0 , sizeof(fatent));
             dwrite(vcBlock->fat_start + fatent_block_num,fat_block);
         }
+        data_block_num = fat_block[fatent_block_offset].next;
         count++;
     }	
     free(dirEntry);
