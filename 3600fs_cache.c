@@ -776,7 +776,7 @@ static int find_dirent(const char* path, dirent* dirEntry) {
 void cache_initialize(int size) { 
     cache_size = 500;
     data_cache = calloc(cache_size, BLOCKSIZE);
-    tags_cache = calloc(cache_size,BLOCKSIZE);
+    tags_cache = calloc(cache_size,sizeof(int));
     if (data_cache == 0) { 
         free(tags_cache);
     }
@@ -784,6 +784,7 @@ void cache_initialize(int size) {
         free(data_cache);
     }
     if (tags_cache && data_cache) {
+        memset( tags_cache, -1, cache_size*sizeof(int) );
         fprintf(stderr,"Cache enabled with size %d blocks\n",cache_size);
     }
     return;
@@ -791,8 +792,7 @@ void cache_initialize(int size) {
 int dread_cache(int blocknum, char* buf) {
     int ret = BLOCKSIZE;
     if ( data_cache && tags_cache ) {
-        if (tags_cache[blocknum%cache_size] == blocknum && data_cache[blocknum%cache_size]) {
-            fprintf(stderr,"Reading from the cache %d\n",blocknum);            
+        if (tags_cache[blocknum%cache_size] == blocknum) {          
             memcpy(buf, data_cache + BLOCKSIZE*(blocknum%cache_size),BLOCKSIZE);            
             return ret;
         }
