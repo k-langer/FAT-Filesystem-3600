@@ -379,26 +379,40 @@ static int vfs_write(const char *path, const char *buf, size_t size,
 	int fat_count; 
     int fats;
     fatent* fatEntry = (fatent*)calloc(1, sizeof(fatent));
+    if (fatEntry == -1 ) {
+        return -1;
+    }
+    int fatent_block_num;
+	int fatent_block_offset;
     char* data_block = (char*)calloc(BLOCKSIZE, sizeof(char));
     if (block == -1) {
 	    return -1;
     } 
     if (dirEntry->valid) {
 	    data_block_num = dirEntry->first_block;
+        int count = 0;
+        while (count < offset/BLOCKSIZE )
+        {
+            fatent_block_num = data_block_num / FATENTS_PER_BLOCK;
+            fatent_block_offset = data_block_num % FATENTS_PER_BLOCK;
+	        dread(vcBlock->fat_start + fatent_block_num, fatEntry);  
+            data_block_num = fatEntry[fatent_block_offset].next;
+            count++;
+        }
+        fprintf(stderr, "At data block %d\n", data_block_num);
     } else {
 	    data_block_num = find_free_block();
+        dirEntry->first_block = data_block_num;
     }
     if (data_block_num == -1 || data_block_num >= (vcBlock->fat_length * FATENTS_PER_BLOCK)) {
 	    return -ENOSPC;
     }
-    dirEntry->first_block = data_block_num;
-	dirEntry->valid = 1;
-	dirEntry->size = size + offset;
+    int size_actual = (size+offset)%4097;
 	struct timespec currentTime;
 	clock_gettime(CLOCK_REALTIME, &currentTime);
 	dirEntry->modify_time = currentTime.tv_sec;
     fat_count = 0; 
-    fats = (size+offset)/BLOCKSIZE + 1;
+    fats = (size_actual)/BLOCKSIZE + 1;
     int cpy_size = 0;
     while (fat_count < fats) {   
         fprintf(stderr,"Writing to data block #: %d\n", data_block_num);
@@ -412,14 +426,14 @@ static int vfs_write(const char *path, const char *buf, size_t size,
         }
         memcpy(data_block + byte_offset, buf+BLOCKSIZE*fat_count, cpy_size);
 	    dwrite(vcBlock->db_start + data_block_num, data_block);
-	    int fatent_block_num = data_block_num / FATENTS_PER_BLOCK;
-	    int fatent_block_offset = data_block_num % FATENTS_PER_BLOCK;
+	    fatent_block_num = data_block_num / FATENTS_PER_BLOCK;
+	    fatent_block_offset = data_block_num % FATENTS_PER_BLOCK;
 	    dread(vcBlock->fat_start + fatent_block_num, data_block);  
         fat_count++; 	    
         fatEntry->used = 1;
         memcpy(data_block + fatent_block_offset*sizeof( fatent ), fatEntry, sizeof(fatent));
 	    dwrite(vcBlock->fat_start + fatent_block_num, data_block); 
-        if ( fat_count >= fats ) {
+        if ( fat_count == fats ) {
             data_block_num = -1;
              fatEntry->eof = 1;
         } else {
@@ -429,8 +443,10 @@ static int vfs_write(const char *path, const char *buf, size_t size,
         memcpy(data_block + fatent_block_offset*sizeof( fatent ), fatEntry, sizeof(fatent));
         dwrite(vcBlock->fat_start + fatent_block_num, data_block); 
         memset(fatEntry,0,sizeof(fatEntry));
-        memset(data_block,0,sizeof(data_block));   
+        memset(data_block,0,sizeof(data_block));
     }     
+    dirEntry->valid = 1;
+    dirEntry->size = size + offset;  
 	dwrite(block, dirEntry);
     free(dirEntry);
     free(fatEntry);
