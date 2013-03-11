@@ -489,7 +489,7 @@ static int vfs_delete(const char *path)
                     int eof = 0;
                     int fatent_block_num;
                     int fatent_block_offset;
-                    while (!eof)
+                    while (!eof && dirEntry->size > 0)
                     {
                         fatent_block_num = data_block_num / FATENTS_PER_BLOCK;
                         fatent_block_offset = data_block_num % FATENTS_PER_BLOCK;
@@ -499,8 +499,8 @@ static int vfs_delete(const char *path)
                         memset( fat_block+fatent_block_offset, 0 , sizeof(fatent));
                         dwrite(vcBlock->fat_start + fatent_block_num,fat_block);
                     }	
+                    free(fat_block);
                 }
-                
 				memset( dirEntry, 0 , BLOCKSIZE );
 				dwrite( block, (char*) dirEntry );
 				return 0;
