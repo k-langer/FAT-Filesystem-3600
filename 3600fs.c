@@ -313,6 +313,9 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
     if ( !dirEntry->valid ) {
         return 0;
     }
+    if ( offset >= dirEntry->size ) {
+        return 0;
+    }
     int data_block_num = dirEntry->first_block;
     char* eof_char;
     char* data_block = (char*)calloc(BLOCKSIZE, sizeof(char));
