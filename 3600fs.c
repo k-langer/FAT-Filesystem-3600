@@ -375,8 +375,8 @@ static int vfs_write(const char *path, const char *buf, size_t size,
 		return -1;
 	}
     int data_block_num = -1;	//data block number
-	char fileFound = find_dirent(path, dirEntry);	
-	if (fileFound == -1) {
+	int direntBlock = find_dirent(path, dirEntry);	
+	if (direntBlock == -1) {
 		return -1;
 	}
 	int fat_count; 
@@ -398,8 +398,8 @@ static int vfs_write(const char *path, const char *buf, size_t size,
         {
             fatent_block_num = data_block_num / FATENTS_PER_BLOCK;
             fatent_block_offset = data_block_num % FATENTS_PER_BLOCK;
-	        dread(vcBlock->fat_start + fatent_block_num, data_block);
-        	memcpy( data_block + fatent_block_offset * sizeof( fatent ), fatEntry, sizeof( fatent ) );
+	    dread(vcBlock->fat_start + fatent_block_num, data_block);
+            memcpy( data_block + fatent_block_offset * sizeof( fatent ), fatEntry, sizeof( fatent ) );
             data_block_num = fatEntry->next;
             count++;
         }
@@ -412,36 +412,26 @@ static int vfs_write(const char *path, const char *buf, size_t size,
 	    return -ENOSPC;
     }
 
-    int size_actual = (size+offset)%4097;
-    fat_count = 0; 
-    fats = (size_actual)/BLOCKSIZE + 1;
-    int cpy_size = 0;
-    while (fat_count < fats) {   
+    int bytesWritten = 0;
+    int bytesToWrite = BLOCKSIZE - offset;
+    while (bytesWritten < size) {   
         fprintf(stderr,"Writing to data block #: %d\n", data_block_num);
-	    int byte_offset = offset;
-	    dread(vcBlock->db_start + data_block_num, data_block);	   
-        if (fat_count == fats-1) {
-            cpy_size = size%BLOCKSIZE;
-            *(data_block + byte_offset + cpy_size) = EOF;
-        } else {
-            cpy_size = BLOCKSIZE;
+	int byte_offset = 0;
+        if (!bytesWritten) {
+            byte_offset = offset;
         }
-        memcpy(data_block + byte_offset, buf+BLOCKSIZE*fat_count, cpy_size);
-	    dwrite(vcBlock->db_start + data_block_num, data_block);
-	    fatent_block_num = data_block_num / FATENTS_PER_BLOCK;
-	    fatent_block_offset = data_block_num % FATENTS_PER_BLOCK;
-	    dread(vcBlock->fat_start + fatent_block_num, data_block);  
-        fat_count++; 	    
+	dread(vcBlock->db_start + data_block_num, data_block);	   
+        memcpy(data_block + byte_offset, buf + bytesWritten, bytesToWrite);
+	dwrite(vcBlock->db_start + data_block_num, data_block);
+	
+        fatent_block_num = data_block_num / FATENTS_PER_BLOCK;
+	fatent_block_offset = data_block_num % FATENTS_PER_BLOCK;
+	dread(vcBlock->fat_start + fatent_block_num, data_block);  
         fatEntry->used = 1;
         memcpy(data_block + fatent_block_offset*sizeof( fatent ), fatEntry, sizeof(fatent));
-	    dwrite(vcBlock->fat_start + fatent_block_num, data_block); 
-        if ( fat_count == fats ) {
-            data_block_num = -1;
-             fatEntry->eof = 1;
-        } else {
-            data_block_num = find_free_block();
-             fatEntry->next =data_block_num;
-        }      
+	dwrite(vcBlock->fat_start + fatent_block_num, data_block); 
+        bytesWritten += bytesToWrite;
+        
         memcpy(data_block + fatent_block_offset*sizeof( fatent ), fatEntry, sizeof(fatent));
         dwrite(vcBlock->fat_start + fatent_block_num, data_block); 
         memset(fatEntry,0,sizeof(fatEntry));
@@ -449,10 +439,10 @@ static int vfs_write(const char *path, const char *buf, size_t size,
     }     
     dirEntry->valid = 1;
     dirEntry->size = size + offset;
-	struct timespec currentTime;
-	clock_gettime(CLOCK_REALTIME, &currentTime);
-	dirEntry->modify_time = currentTime.tv_sec;
-	dwrite(block, dirEntry);
+    struct timespec currentTime;
+    clock_gettime(CLOCK_REALTIME, &currentTime);
+    dirEntry->modify_time = currentTime.tv_sec;
+    dwrite(direntBlock, dirEntry);
 	
     free(dirEntry);
     free(fatEntry);
@@ -809,22 +799,30 @@ static int find_free_block() {
 	if (!vcBlock) {
 		return -1;
 	}
-    fatent* fatList = (fatent*) calloc(512,sizeof(char));
-    dread(vcBlock->fat_start,fatList);
-    int fatent_offset = 0;
-    int block_offset = 0;    
-    while (fatList[fatent_offset % FATENTS_PER_BLOCK].used) {
-        fatent_offset++;
-        if ( fatent_offset % FATENTS_PER_BLOCK == 0 ) {
-            block_offset++;
-            dread(vcBlock->fat_start + block_offset, fatList);
-        }
-    }
-    if ( fatList[fatent_offset % FATENTS_PER_BLOCK].used ) {
-        return -1; 
-    }
-    free( fatList );
-    return fatent_offset;
+
+	int fatent_offset = 0;
+	int block_offset = 0;
+	char* tempBlock = (char*) calloc(512, sizeof(char));
+	dread(vcBlock->fat_start, tempBlock);
+	fatent* fatEntry = (fatent*) calloc(1, sizeof(fatent));
+	memcpy(fatEntry, tempBlock, sizeof(fatent));
+
+	while(fatEntry->used) {
+		fatent_offset++;
+		if (fatent_offset % FATENTS_PER_BLOCK == 0) {
+			block_offset++;
+			dread(vcBlock->fat_start + block_offset, tempBlock);
+		}
+		memcpy(fatEntry, tempBlock + (fatent_offset % FATENTS_PER_BLOCK) * sizeof(fatent), sizeof(fatent));
+	}
+	free(tempBlock);
+	if (fatEntry->used) {
+		free(fatEntry);
+		return -1;
+	} else {
+		free(fatEntry);
+		return fatent_offset;
+	}
 }
 
 static int find_dirent(const char* path, dirent* dirEntry) {
