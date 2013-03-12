@@ -374,29 +374,33 @@ static int vfs_write(const char *path, const char *buf, size_t size,
 	if (!dirEntry) {
 		return -1;
 	}
-    int data_block_num = -1;
-	int block = find_dirent(path, dirEntry);
+    int data_block_num = -1;	//data block number
+	char fileFound = find_dirent(path, dirEntry);	
+	if (fileFound == -1) {
+		return -1;
+	}
 	int fat_count; 
     int fats;
     fatent* fatEntry = (fatent*)calloc(1, sizeof(fatent));
-    if (fatEntry == -1 ) {
+    if (!fatEntry) {
         return -1;
     }
-    int fatent_block_num;
-	int fatent_block_offset;
+    int fatent_block_num;	//block number to find the fatent
+	int fatent_block_offset;	//offset within that block to find the fatent
     char* data_block = (char*)calloc(BLOCKSIZE, sizeof(char));
-    if (block == -1) {
+    if (!data_block) {
 	    return -1;
     } 
     if (dirEntry->valid) {
 	    data_block_num = dirEntry->first_block;
         int count = 0;
-        while (count < offset/BLOCKSIZE )
+        while (count <= offset/BLOCKSIZE )
         {
             fatent_block_num = data_block_num / FATENTS_PER_BLOCK;
             fatent_block_offset = data_block_num % FATENTS_PER_BLOCK;
-	        dread(vcBlock->fat_start + fatent_block_num, fatEntry);  
-            data_block_num = fatEntry[fatent_block_offset].next;
+	        dread(vcBlock->fat_start + fatent_block_num, data_block);
+        	memcpy( data_block + fatent_block_offset * sizeof( fatent ), fatEntry, sizeof( fatent ) );
+            data_block_num = fatEntry->next;
             count++;
         }
         fprintf(stderr, "At data block %d\n", data_block_num);
@@ -407,10 +411,8 @@ static int vfs_write(const char *path, const char *buf, size_t size,
     if (data_block_num == -1 || data_block_num >= (vcBlock->fat_length * FATENTS_PER_BLOCK)) {
 	    return -ENOSPC;
     }
+
     int size_actual = (size+offset)%4097;
-	struct timespec currentTime;
-	clock_gettime(CLOCK_REALTIME, &currentTime);
-	dirEntry->modify_time = currentTime.tv_sec;
     fat_count = 0; 
     fats = (size_actual)/BLOCKSIZE + 1;
     int cpy_size = 0;
@@ -446,8 +448,12 @@ static int vfs_write(const char *path, const char *buf, size_t size,
         memset(data_block,0,sizeof(data_block));
     }     
     dirEntry->valid = 1;
-    dirEntry->size = size + offset;  
+    dirEntry->size = size + offset;
+	struct timespec currentTime;
+	clock_gettime(CLOCK_REALTIME, &currentTime);
+	dirEntry->modify_time = currentTime.tv_sec;
 	dwrite(block, dirEntry);
+	
     free(dirEntry);
     free(fatEntry);
     free(data_block);
