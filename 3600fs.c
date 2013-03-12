@@ -398,7 +398,7 @@ static int vfs_write(const char *path, const char *buf, size_t size,
         {
             fatent_block_num = data_block_num / FATENTS_PER_BLOCK;
             fatent_block_offset = data_block_num % FATENTS_PER_BLOCK;
-	    dread(vcBlock->fat_start + fatent_block_num, data_block);
+	    	dread(vcBlock->fat_start + fatent_block_num, data_block);
             memcpy( data_block + fatent_block_offset * sizeof( fatent ), fatEntry, sizeof( fatent ) );
             data_block_num = fatEntry->next;
             count++;
@@ -416,24 +416,44 @@ static int vfs_write(const char *path, const char *buf, size_t size,
     int bytesToWrite = BLOCKSIZE - offset;
     while (bytesWritten < size) {   
         fprintf(stderr,"Writing to data block #: %d\n", data_block_num);
-	int byte_offset = 0;
+		int byte_offset = 0;
         if (!bytesWritten) {
             byte_offset = offset;
         }
-	dread(vcBlock->db_start + data_block_num, data_block);	   
+
+        //write data
+		dread(vcBlock->db_start + data_block_num, data_block);	   
         memcpy(data_block + byte_offset, buf + bytesWritten, bytesToWrite);
-	dwrite(vcBlock->db_start + data_block_num, data_block);
-	
-        fatent_block_num = data_block_num / FATENTS_PER_BLOCK;
-	fatent_block_offset = data_block_num % FATENTS_PER_BLOCK;
-	dread(vcBlock->fat_start + fatent_block_num, data_block);  
-        fatEntry->used = 1;
-        memcpy(data_block + fatent_block_offset*sizeof( fatent ), fatEntry, sizeof(fatent));
-	dwrite(vcBlock->fat_start + fatent_block_num, data_block); 
+		dwrite(vcBlock->db_start + data_block_num, data_block);
         bytesWritten += bytesToWrite;
+
+
+    	fatent_block_num = data_block_num / FATENTS_PER_BLOCK;
+        fatent_block_offset = data_block_num % FATENTS_PER_BLOCK;
+    	dread(vcBlock->fat_start + fatent_block_num, data_block);
+        memcpy( fatEntry, data_block + fatent_block_offset * sizeof( fatent ), sizeof( fatent ) );
+		fatEntry->used = 1;
         
-        memcpy(data_block + fatent_block_offset*sizeof( fatent ), fatEntry, sizeof(fatent));
-        dwrite(vcBlock->fat_start + fatent_block_num, data_block); 
+        if (bytesWritten < size) {
+        	if ( fatEntry->eof ) {
+        		fatEntry->eof = 0;
+        	}
+        	if ( fatEntry->next ) {
+        		data_block_num = fatEntry->next;
+        	} else {
+        		data_block_num = find_free_block;
+        		if (data_block_num == -1 || data_block_num >= (vcBlock->fat_length * FATENTS_PER_BLOCK)) {
+				    return -ENOSPC;
+			    }
+        	}
+        } else {
+        	fatEntry->eof = 1;
+        	fatEntry->next = 0;
+        }
+    
+        memcpy( data_block + fatent_block_offset * sizeof( fatent ), fatEntry, sizeof( fatent ) );
+		dwrite(vcBlock->fat_start + fatent_block_num, data_block); 
+        
         memset(fatEntry,0,sizeof(fatEntry));
         memset(data_block,0,sizeof(data_block));
     }     
