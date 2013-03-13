@@ -1,5 +1,4 @@
-/*
- * CS3600, Spring 2013
+/* CS3600, Spring 2013
  * Project 2 Starter Code
  * (c) 2013 Alan Mislove
  *
@@ -322,30 +321,41 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
     if (!data_block) {
 			return -1;
 	}
-    fatent* fat_block = (fatent*)calloc(BLOCKSIZE, sizeof(char));
-    if (!fat_block) {
+    fatent* fatEntry = (fatent*)calloc(1, sizeof(fatent));
+    if (!fatEntry) {
 			return -1;
 	}
     int eof = 0;
     int count = 0;
+    int bytesRead = 0;
     int fatent_block_num;
 	int fatent_block_offset;
+    int byte_offset = 0;
    
-    while (!eof)
+    while (!eof && bytesRead < size)
     {
-        fatent_block_num = data_block_num / FATENTS_PER_BLOCK;
+	if (count) {
+	    byte_offset = 0;
+	} else {
+	    byte_offset = offset;
+        }
+	fatent_block_num = data_block_num / FATENTS_PER_BLOCK;
         fatent_block_offset = data_block_num % FATENTS_PER_BLOCK;
-	    dread(vcBlock->fat_start + fatent_block_num, fat_block);  
 	    dread(vcBlock->db_start + data_block_num, data_block); 
-        memcpy(buf+count*BLOCKSIZE, data_block, BLOCKSIZE);
-        eof = fat_block[fatent_block_offset].eof;
-        data_block_num = fat_block[fatent_block_offset].next;
+        memcpy(buf+count*BLOCKSIZE, data_block + byte_offset, BLOCKSIZE);
+	bytesRead += BLOCKSIZE;
+        dread(vcBlock->fat_start + fatent_block_num, data_block);  
+        memcpy(fatEntry, data_block + fatent_block_offset * sizeof(fatent), sizeof(fatent));
+	eof = fatEntry->eof;
+        data_block_num = fatEntry->next;
         count++;
     }	
     eof_char = strchr(buf, EOF);
-	*eof_char = 0;
+    if (eof_char) {
+        *eof_char = 0;
+    }
 	free(data_block);
-    free(fat_block);
+    free(fatEntry);
     free(dirEntry);
 	return strlen(buf);    
 }
@@ -375,8 +385,8 @@ static int vfs_write(const char *path, const char *buf, size_t size,
 		return -1;
 	}
     int data_block_num = -1;	//data block number
-	int direntBlock = find_dirent(path, dirEntry);	
-	if (direntBlock == -1) {
+	char fatentBlock = find_dirent(path, dirEntry);	
+	if (fatentBlock == -1) {
 		return -1;
 	}
 	int fat_count; 
@@ -394,12 +404,12 @@ static int vfs_write(const char *path, const char *buf, size_t size,
     if (dirEntry->valid) {
 	    data_block_num = dirEntry->first_block;
         int count = 0;
-        while (count <= offset/BLOCKSIZE )
+        while (offset/BLOCKSIZE && count < offset/BLOCKSIZE )
         {
             fatent_block_num = data_block_num / FATENTS_PER_BLOCK;
             fatent_block_offset = data_block_num % FATENTS_PER_BLOCK;
-	    	dread(vcBlock->fat_start + fatent_block_num, data_block);
-            memcpy( data_block + fatent_block_offset * sizeof( fatent ), fatEntry, sizeof( fatent ) );
+	        dread(vcBlock->fat_start + fatent_block_num, data_block);
+        	memcpy( fatEntry, data_block + fatent_block_offset * sizeof( fatent ), sizeof( fatent ) );
             data_block_num = fatEntry->next;
             count++;
         }
@@ -412,57 +422,53 @@ static int vfs_write(const char *path, const char *buf, size_t size,
 	    return -ENOSPC;
     }
 
-    int bytesWritten = 0;
-    int bytesToWrite = BLOCKSIZE - offset;
-    while (bytesWritten < size) {   
+    int size_actual = (size+offset)%4097;
+    fat_count = 0; 
+    fats = (size_actual)/BLOCKSIZE + 1;
+    int cpy_size = 0;
+    while (fat_count < fats) {   
         fprintf(stderr,"Writing to data block #: %d\n", data_block_num);
-		int byte_offset = 0;
-        if (!bytesWritten) {
-            byte_offset = offset;
-        }
-
-        //write data
-		dread(vcBlock->db_start + data_block_num, data_block);	   
-        memcpy(data_block + byte_offset, buf + bytesWritten, bytesToWrite);
-		dwrite(vcBlock->db_start + data_block_num, data_block);
-        bytesWritten += bytesToWrite;
-
-
-    	fatent_block_num = data_block_num / FATENTS_PER_BLOCK;
-        fatent_block_offset = data_block_num % FATENTS_PER_BLOCK;
-    	dread(vcBlock->fat_start + fatent_block_num, data_block);
-        memcpy( fatEntry, data_block + fatent_block_offset * sizeof( fatent ), sizeof( fatent ) );
-		fatEntry->used = 1;
-        
-        if (bytesWritten < size) {
-        	if ( fatEntry->eof ) {
-        		fatEntry->eof = 0;
-        	}
-        	if ( fatEntry->next ) {
-        		data_block_num = fatEntry->next;
-        	} else {
-        		data_block_num = find_free_block;
-        		if (data_block_num == -1 || data_block_num >= (vcBlock->fat_length * FATENTS_PER_BLOCK)) {
-				    return -ENOSPC;
-			    }
-        	}
+	    int byte_offset = 0;
+	if (!fat_count) {
+		byte_offset = offset;
+	}
+	    dread(vcBlock->db_start + data_block_num, data_block);	   
+        if (fat_count == fats-1) {
+            cpy_size = size%BLOCKSIZE;
+            *(data_block + byte_offset + cpy_size) = EOF;
         } else {
-        	fatEntry->eof = 1;
-        	fatEntry->next = 0;
+            cpy_size = BLOCKSIZE;
         }
-    
-        memcpy( data_block + fatent_block_offset * sizeof( fatent ), fatEntry, sizeof( fatent ) );
-		dwrite(vcBlock->fat_start + fatent_block_num, data_block); 
-        
-        memset(fatEntry,0,sizeof(fatEntry));
-        memset(data_block,0,sizeof(data_block));
+        memcpy(data_block + byte_offset, buf+BLOCKSIZE*fat_count, cpy_size);
+	    dwrite(vcBlock->db_start + data_block_num, data_block);
+	    fatent_block_num = data_block_num / FATENTS_PER_BLOCK;
+	    fatent_block_offset = data_block_num % FATENTS_PER_BLOCK;
+	    dread(vcBlock->fat_start + fatent_block_num, data_block);  
+        fat_count++; 	   
+	memcpy(fatEntry, data_block + fatent_block_offset * sizeof( fatent ), sizeof( fatent ) ); 
+        fatEntry->used = 1;
+        memcpy(data_block + fatent_block_offset*sizeof( fatent ), fatEntry, sizeof(fatent));
+        dwrite(vcBlock->fat_start + fatent_block_num, data_block); 
+
+        if ( fat_count == fats ) {
+            data_block_num = -1;
+             fatEntry->eof = 1;
+        } else {
+             if (fatEntry->eof) {
+                 fatEntry->eof = 0;
+             }
+	     data_block_num = find_free_block();
+             fatEntry->next = data_block_num;
+        }      
+        memcpy(data_block + fatent_block_offset*sizeof( fatent ), fatEntry, sizeof(fatent));
+        dwrite(vcBlock->fat_start + fatent_block_num, data_block); 
     }     
     dirEntry->valid = 1;
     dirEntry->size = size + offset;
-    struct timespec currentTime;
-    clock_gettime(CLOCK_REALTIME, &currentTime);
-    dirEntry->modify_time = currentTime.tv_sec;
-    dwrite(direntBlock, dirEntry);
+	struct timespec currentTime;
+	clock_gettime(CLOCK_REALTIME, &currentTime);
+	dirEntry->modify_time = currentTime.tv_sec;
+	dwrite(fatentBlock, dirEntry);
 	
     free(dirEntry);
     free(fatEntry);
@@ -819,30 +825,22 @@ static int find_free_block() {
 	if (!vcBlock) {
 		return -1;
 	}
-
-	int fatent_offset = 0;
-	int block_offset = 0;
-	char* tempBlock = (char*) calloc(512, sizeof(char));
-	dread(vcBlock->fat_start, tempBlock);
-	fatent* fatEntry = (fatent*) calloc(1, sizeof(fatent));
-	memcpy(fatEntry, tempBlock, sizeof(fatent));
-
-	while(fatEntry->used) {
-		fatent_offset++;
-		if (fatent_offset % FATENTS_PER_BLOCK == 0) {
-			block_offset++;
-			dread(vcBlock->fat_start + block_offset, tempBlock);
-		}
-		memcpy(fatEntry, tempBlock + (fatent_offset % FATENTS_PER_BLOCK) * sizeof(fatent), sizeof(fatent));
-	}
-	free(tempBlock);
-	if (fatEntry->used) {
-		free(fatEntry);
-		return -1;
-	} else {
-		free(fatEntry);
-		return fatent_offset;
-	}
+    fatent* fatList = (fatent*) calloc(512,sizeof(char));
+    dread(vcBlock->fat_start,fatList);
+    int fatent_offset = 0;
+    int block_offset = 0;    
+    while (fatList[fatent_offset % FATENTS_PER_BLOCK].used) {
+        fatent_offset++;
+        if ( fatent_offset % FATENTS_PER_BLOCK == 0 ) {
+            block_offset++;
+            dread(vcBlock->fat_start + block_offset, fatList);
+        }
+    }
+    if ( fatList[fatent_offset % FATENTS_PER_BLOCK].used ) {
+        return -1; 
+    }
+    free( fatList );
+    return fatent_offset;
 }
 
 static int find_dirent(const char* path, dirent* dirEntry) {
