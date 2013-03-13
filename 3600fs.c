@@ -450,7 +450,7 @@ static int vfs_write(const char *path, const char *buf, size_t size,
         memcpy(data_block + fatent_block_offset*sizeof( fatent ), fatEntry, sizeof(fatent));
         dwrite(vcBlock->fat_start + fatent_block_num, data_block); 
 
-        if ( fat_count == fats && (offset % 4096) != 0) {
+        if ( fat_count == fats && ( offset == 0 || (offset % 4096) != 0) ) {
             data_block_num = -1;
              fatEntry->eof = 1;
         } else {
@@ -789,6 +789,7 @@ static int vfs_truncate(const char *file, off_t offset)
         }
         data_block_num = fat_block[fatent_block_offset].next;
         count++;
+        
     }	
     free(dirEntry);
     free(data_block);
