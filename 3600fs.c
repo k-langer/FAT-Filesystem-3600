@@ -430,14 +430,14 @@ static int vfs_write(const char *path, const char *buf, size_t size,
         fprintf(stderr,"Writing to data block #: %d\n", data_block_num);
 	    int byte_offset = 0;
 	if (!fat_count) {
-		byte_offset = offset%4096;
+		byte_offset = offset%BLOCKSIZE;;
 	}
 	    dread(vcBlock->db_start + data_block_num, data_block);	   
         if (fat_count == fats-1) {
-            cpy_size = size%BLOCKSIZE;
+            cpy_size = size - fat_count * BLOCKSIZE + (offset%BLOCKSIZE);
             *(data_block + byte_offset + cpy_size) = EOF;
         } else {
-            cpy_size = BLOCKSIZE;
+            cpy_size = BLOCKSIZE - byte_offset;
         }
        
         memcpy(data_block + byte_offset, buf+BLOCKSIZE*fat_count, cpy_size);
