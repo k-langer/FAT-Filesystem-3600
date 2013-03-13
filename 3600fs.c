@@ -450,7 +450,7 @@ static int vfs_write(const char *path, const char *buf, size_t size,
         memcpy(data_block + fatent_block_offset*sizeof( fatent ), fatEntry, sizeof(fatent));
         dwrite(vcBlock->fat_start + fatent_block_num, data_block); 
 
-        if ( fat_count == fats ) {
+        if ( fat_count == fats && (offset % 4096) != 0) {
             data_block_num = -1;
              fatEntry->eof = 1;
         } else {
@@ -858,8 +858,7 @@ static int find_dirent(const char* path, dirent* dirEntry) {
 	int block = vcBlock->de_start;
 	while(block - vcBlock->de_start < vcBlock->de_length) {
 		dread(block, dirEntry);
-		if (strncmp(filename, dirEntry->name, strlen(filename)) == 0
-		    && strncmp(filename, dirEntry->name, strlen(dirEntry->name))) {
+		if (strncmp(filename, dirEntry->name, strlen(filename)) == 0) {
 			found = 1;
 			break;
 		} else {
