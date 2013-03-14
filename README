@@ -1,4 +1,16 @@
 Authors: Kevin Langer, Javier Muhrer
 CS3600 File System Project
 
-We decided to implement FAT32 for this project. 
+We decided to implement FAT32 for this project.
+
+We kept our dirents at 512 bytes (blocksize), choosing not add greater risk of memory issues. Fat entries were set to the typical 4 byte size.
+
+Most of our issues during implementation were the result of sloppy memory management. Initially we were reading 512 bytes into memory locations with insuffienct memory allocated. More memory issues came later during read/write. We would often write or read past the end of buffers due to mistakes with the way we dealt with offset reading and writing.
+
+Most of the functions were fairly straight-forward to implement until we reached read and write. Single-byte read and write was fairly simple and looked good in code. At this time, we also implemented a helper function to find the dirent block of a specified filename. This helped greatly. 
+
+Once files started spanning multiple blocks, our codebase grew uglier. The large read/write test took considerable time to pass succesfully. Once that was complete, very large read/write proved an even greater challenge. We struggled to get the eof bit set on the correct FAT entry. Of course, the close relationship between read and write made debugging difficult. Knowing which function was creating issues was tough, especially when both functions were buggy until the very end.
+
+We relied heavily on gdb and had to use some printf statements to track down some of the peskier segmentation faults.
+
+Once all functionality was in place, we implemented a simple cache for reads.
