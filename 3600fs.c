@@ -349,6 +349,8 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
 	dread_cache(vcBlock->fat_start + fatent_block_num, data_block);
 	memcpy(fatEntry, data_block + fatent_block_offset * sizeof(fatent), sizeof(fatent));
    	data_block_num = fatEntry->next;
+	fatent_block_num = data_block_num / FATENTS_PER_BLOCK;
+	fatent_block_offset = data_block_num % FATENTS_PER_BLOCK;
     }
 
     while (!eof && bytesRead < size)
