@@ -71,7 +71,8 @@ static void* vfs_mount(struct fuse_conn_info *conn) {
     cache_initialize(0);
     // Do not touch or move this code; connects the disk
     if(vcBlock->magic_number != MAGIC_NUMBER || vcBlock->mounted == 1) { 
-	printf("Cannot mount file system\n");
+	    printf("Cannot mount file system\n");
+        dunconnect();        
         exit(1);
     }
     vcBlock->mounted = 1;
@@ -166,7 +167,6 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
 			stbuf->st_blocks = dirEntry->size / BLOCKSIZE;
 		}
 	}
-    
     return 0;
 }
 
@@ -411,7 +411,7 @@ static int vfs_write(const char *path, const char *buf, size_t size,
     
 
     fprintf(stderr,"vfs_write called on %s for size %d and offset %d\n",path,size,offset);
-	dirent* dirEntry = (dirent*)calloc(1, sizeof(dirent));
+	dirent* dirEntry = (dirent*)calloc(2, sizeof(dirent));
 	if (!dirEntry) {
 		return -1;
 	}
@@ -422,13 +422,13 @@ static int vfs_write(const char *path, const char *buf, size_t size,
 	}
 	int fat_count; 
     int fats;
-    fatent* fatEntry = (fatent*)calloc(1, sizeof(fatent));
+    fatent* fatEntry = (fatent*)calloc(2, sizeof(fatent));
     if (!fatEntry) {
         return -1;
     }
     int fatent_block_num;	//block number to find the fatent
 	int fatent_block_offset;	//offset within that block to find the fatent
-    char* data_block = (char*)calloc(BLOCKSIZE, sizeof(char));
+    char* data_block = (char*)calloc(2*BLOCKSIZE, sizeof(char));
     if (!data_block) {
 	    return -1;
     } 
