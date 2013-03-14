@@ -1,6 +1,16 @@
 Authors: Kevin Langer, Javier Muhrer
 CS3600 File System Project
 
+Developed on
+ISA: x86-AMD64
+Linux: 2.6.31-23-generic-pae
+gcc: (Ubuntu 4.4.1-4ubuntu9) 4.4.1
+Using Compiler flags: gcc -std=c99 -O0 -g -lm -Wall -pedantic -Werror -Wextra
+
+Installing/Running
+run make. Create a disk by running ./3600mkfs SIZE. Run the file system by running 3600fs binary with the flags -s -d LOCATION.
+
+
 We decided to implement FAT32 for this project.
 
 We kept our dirents at 512 bytes (blocksize), choosing not add greater risk of memory issues. Fat entries were set to the typical 4 byte size.
@@ -13,4 +23,10 @@ Once files started spanning multiple blocks, our codebase grew uglier. The large
 
 We relied heavily on gdb and had to use some printf statements to track down some of the peskier segmentation faults.
 
-Once all functionality was in place, we implemented a simple cache for reads.
+Once all functionality was in place, we implemented a simple cache for reads. The cache is a direct mapped cache with demand fetching and linear hashing. This scheme was picked for its simplicity, while a fully associative cache that implements LRU would have provided more coverage this cache
+
+was able to reduce reads by a large margin. Reads are kept coherent by a function that masks all read and writes. On a write, data is stored on disk and the blocknumber is used to hash the location in the cache. This is needed for coherency. On reads, the cache also updates its entries in the same way,
+
+this is done for speed. Before every disk read a routine does a tag match with the data in the cache using the blocknumber. If it is in the cache the entire block is added to the buffer and there is no need to read from disk. Otherwise, the disk is read and the cache is updated. This allowed for the cache to be 
+
+completely transparent to all the other functions as the disk is accessed exactly the same way.
