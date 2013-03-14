@@ -39,6 +39,15 @@
 
 vcb* vcBlock;
 
+//Masking for cache
+int dread_cache(int blocknum, char* buf);
+int dwrite_cache(int blocknum,char* buf);
+void cache_initialize(int size);
+char* data_cache;
+char* tags_cache;
+int cache_size;
+int attempted_reads;
+
 //returns data block number of 'first' free block
 static int find_free_block();
 
@@ -58,7 +67,8 @@ static void* vfs_mount(struct fuse_conn_info *conn) {
     fprintf(stderr, "vfs_mount called\n");
     dconnect();
     vcBlock = (vcb*)calloc(1, sizeof(vcb));
-    dread(0, vcBlock);
+    dread_cache(0, vcBlock);
+    cache_initialize(0);
     // Do not touch or move this code; connects the disk
     if(vcBlock->magic_number != MAGIC_NUMBER) { 
 	printf("Cannot mount file system\n");
@@ -72,6 +82,7 @@ static void* vfs_mount(struct fuse_conn_info *conn) {
  *
  */
 static void vfs_unmount (void *private_data) {
+    fprintf(stderr,"total reads without cache: %d\n",attempted_reads);
     fprintf(stderr, "vfs_unmount called\n");
 
     /* 3600: YOU SHOULD ADD CODE HERE TO MAKE SURE YOUR ON-DISK STRUCTURES
@@ -111,7 +122,7 @@ static int vfs_getattr(const char *path, struct stat *stbuf) {
 	if (!vcBlock) {
 		return -1;
 	}
-	dread(0, vcBlock);
+	dread_cache(0, vcBlock);
 	if (vcBlock->de_length == 0) {
 		return -ENOENT;
 	}
@@ -200,14 +211,14 @@ static int vfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 		if (!vcBlock) {
 			return -1;
 		}
-		dread(0, vcBlock);
+		dread_cache(0, vcBlock);
 		dirent* dirEntry = (dirent*)calloc(1, sizeof(dirent));
 		if (!dirEntry) {
 			return -1;
 		}
 		int block = vcBlock->de_start + offset;
 		while (block - vcBlock->de_start < vcBlock->de_length) {
-			dread(block, dirEntry);
+			dread_cache(block, dirEntry);
 			if (dirEntry->create_time) {
 				if (!filler(buf, dirEntry->name, NULL, block)) {
 					return 0;
@@ -235,7 +246,7 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
 	if (!vcBlock) {
 		return -1;
 	}
-	dread(0, vcBlock);
+	dread_cache(0, vcBlock);
 	dirent* dirEntry = (dirent*)calloc(1, sizeof(dirent));
 	if (!dirEntry) {
 		return -1;
@@ -249,7 +260,7 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
 	char foundEmpty = 0;
 	block = vcBlock->de_start;
 	while(block - vcBlock->de_start < vcBlock->de_length) {
-		dread(block, dirEntry);
+		dread_cache(block, dirEntry);
 		if (!dirEntry->create_time) {
 			foundEmpty = 1;
 			break;
@@ -269,7 +280,7 @@ static int vfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
 		dirEntry->access_time = currentTime.tv_sec;
 		dirEntry->modify_time = currentTime.tv_sec;
 		dirEntry->create_time = currentTime.tv_sec;
-		dwrite(block, dirEntry);
+		dwrite_cache(block, dirEntry);
 		return 0;
 	} else {
 		return -1;
@@ -308,7 +319,7 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
     if ( !vcBlock ) {
         return -1;
     }
-    dread(0,vcBlock);
+    dread_cache(0,vcBlock);
     if ( !dirEntry->valid ) {
         return 0;
     }
@@ -335,7 +346,7 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
     
     
     while (blocksToSkip--) {
-	dread(vcBlock->fat_start + fatent_block_num, data_block);
+	dread_cache(vcBlock->fat_start + fatent_block_num, data_block);
 	memcpy(fatEntry, data_block + fatent_block_offset * sizeof(fatent), sizeof(fatent));
    	data_block_num = fatEntry->next;
     }
@@ -349,10 +360,10 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
         }
 	fatent_block_num = data_block_num / FATENTS_PER_BLOCK;
         fatent_block_offset = data_block_num % FATENTS_PER_BLOCK;
-	    dread(vcBlock->db_start + data_block_num, data_block); 
+	dread_cache(vcBlock->db_start + data_block_num, data_block); 
         memcpy(buf+count*BLOCKSIZE, data_block + byte_offset, BLOCKSIZE - byte_offset);
 	bytesRead += BLOCKSIZE - byte_offset;
-        dread(vcBlock->fat_start + fatent_block_num, data_block);  
+        dread_cache(vcBlock->fat_start + fatent_block_num, data_block);  
         fprintf(stderr, "reading from block number %i", data_block_num);
 	memcpy(fatEntry, data_block + fatent_block_offset * sizeof(fatent), sizeof(fatent));
 	eof = fatEntry->eof;
@@ -417,9 +428,14 @@ static int vfs_write(const char *path, const char *buf, size_t size,
         {
             fatent_block_num = data_block_num / FATENTS_PER_BLOCK;
             fatent_block_offset = data_block_num % FATENTS_PER_BLOCK;
-	        dread(vcBlock->fat_start + fatent_block_num, data_block);
+	        dread_cache(vcBlock->fat_start + fatent_block_num, data_block);
         	memcpy( fatEntry, data_block + fatent_block_offset * sizeof( fatent ), sizeof( fatent ) );
             data_block_num = fatEntry->next;
+            if ( fatEntry->eof )
+            {
+                fatEntry->eof = 0;
+                dwrite_cache(vcBlock->fat_start + fatent_block_num, data_block);
+            }
             count++;
         }
         fprintf(stderr, "At data block %d\n", data_block_num);
@@ -430,7 +446,6 @@ static int vfs_write(const char *path, const char *buf, size_t size,
     if (data_block_num == -1 || data_block_num >= (vcBlock->fat_length * FATENTS_PER_BLOCK)) {
 	    return -ENOSPC;
     }
-
     int size_actual = size;
     fat_count = 0; 
     fats = (size_actual)/BLOCKSIZE + 1;
@@ -441,26 +456,25 @@ static int vfs_write(const char *path, const char *buf, size_t size,
 	if (!fat_count) {
 		byte_offset = offset%BLOCKSIZE;;
 	}
-	    dread(vcBlock->db_start + data_block_num, data_block);	   
+	    dread_cache(vcBlock->db_start + data_block_num, data_block);	   
         if (fat_count == fats-1) {
             cpy_size = size - fat_count * BLOCKSIZE + (offset%BLOCKSIZE);
             *(data_block + byte_offset + cpy_size) = EOF;
         } else {
             cpy_size = BLOCKSIZE - byte_offset;
-        }
-       
+        }       
         memcpy(data_block + byte_offset, buf+BLOCKSIZE*fat_count, cpy_size);
-	    dwrite(vcBlock->db_start + data_block_num, data_block);
+	    dwrite_cache(vcBlock->db_start + data_block_num, data_block);
 	    fatent_block_num = data_block_num / FATENTS_PER_BLOCK;
 	    fatent_block_offset = data_block_num % FATENTS_PER_BLOCK;
-	    dread(vcBlock->fat_start + fatent_block_num, data_block);  
+	    dread_cache(vcBlock->fat_start + fatent_block_num, data_block);  
         fat_count++; 	   
 	    memcpy(fatEntry, data_block + fatent_block_offset * sizeof( fatent ), sizeof( fatent ) ); 
         fatEntry->used = 1;
         memcpy(data_block + fatent_block_offset*sizeof( fatent ), fatEntry, sizeof(fatent));
-        dwrite(vcBlock->fat_start + fatent_block_num, data_block); 
+        dwrite_cache(vcBlock->fat_start + fatent_block_num, data_block); 
 
-        if ( fat_count == fats && ( offset == 0 || (offset % 4096) != 0) ) {
+        if ( fat_count == fats ) {
             data_block_num = -1;
              fatEntry->eof = 1;
         } else {
@@ -471,14 +485,14 @@ static int vfs_write(const char *path, const char *buf, size_t size,
              fatEntry->next = data_block_num;
         }      
         memcpy(data_block + fatent_block_offset*sizeof( fatent ), fatEntry, sizeof(fatent));
-        dwrite(vcBlock->fat_start + fatent_block_num, data_block); 
+        dwrite_cache(vcBlock->fat_start + fatent_block_num, data_block); 
     }     
     dirEntry->valid = 1;
     dirEntry->size = size + offset;
 	struct timespec currentTime;
 	clock_gettime(CLOCK_REALTIME, &currentTime);
 	dirEntry->modify_time = currentTime.tv_sec;
-	dwrite(fatentBlock, dirEntry);
+	dwrite_cache(fatentBlock, dirEntry);
 	
     free(dirEntry);
     free(fatEntry);
@@ -508,7 +522,7 @@ static int vfs_delete(const char *path)
 			fprintf( stderr, "vcBlock is not valid!\n" );
 			return -1;
 		}
-		dread(0, (char*) vcBlock);
+		dread_cache(0, (char*) vcBlock);
 		dirEntry = (dirent*) calloc(1, sizeof( dirent ) );
 		if ( !dirEntry ) {
 			fprintf( stderr, "dirEntry is not valid!\n" );
@@ -524,7 +538,7 @@ static int vfs_delete(const char *path)
 	int block = vcBlock->de_start;
 	
 	while ( block - vcBlock->de_start < vcBlock->de_length ) {
-		dread(block, (char*) dirEntry);
+		dread_cache(block, (char*) dirEntry);
 		for ( i = lastSlash+1; i < strlen( path ); i++ ) {
 			if ( path[i] != dirEntry->name[i-1] )
 				break;
@@ -542,18 +556,19 @@ static int vfs_delete(const char *path)
                     int fatent_block_offset;
                     while (!eof && dirEntry->size > 0)
                     {
+                        
                         fatent_block_num = data_block_num / FATENTS_PER_BLOCK;
                         fatent_block_offset = data_block_num % FATENTS_PER_BLOCK;
-                        dread(vcBlock->fat_start + fatent_block_num, fat_block);  
+                        dread_cache(vcBlock->fat_start + fatent_block_num, fat_block);  
                         eof = fat_block[fatent_block_offset].eof;
                         data_block_num = fat_block[fatent_block_offset].next;
                         memset( fat_block+fatent_block_offset, 0 , sizeof(fatent));
-                        dwrite(vcBlock->fat_start + fatent_block_num,fat_block);
+                        dwrite_cache(vcBlock->fat_start + fatent_block_num,fat_block);
                     }	
                     free(fat_block);
                 }
 				memset( dirEntry, 0 , BLOCKSIZE );
-				dwrite( block, (char*) dirEntry );
+				dwrite_cache( block, (char*) dirEntry );
 				return 0;
 			}
 		}
@@ -582,7 +597,7 @@ static int vfs_rename(const char *from, const char *to)
 			fprintf( stderr, "vcBlock is not valid!\n" );
 			return -1;
 		}
-		dread(0, (char*) vcBlock);
+		dread_cache(0, (char*) vcBlock);
 		dirEntry = (dirent*) calloc(1, sizeof( dirent ) );
 		if ( !dirEntry ) {
 			fprintf( stderr, "dirEntry is not valid!\n" );
@@ -592,7 +607,7 @@ static int vfs_rename(const char *from, const char *to)
 	int block = vcBlock->de_start;
 	unsigned int i;
 	while ( block - vcBlock->de_start < vcBlock->de_length ) {
-		dread(block, (char*) dirEntry);
+		dread_cache(block, (char*) dirEntry);
 		fprintf( stderr, "to: %s cmp: %s\n",to,dirEntry->name);
 		/*
         //TODO Fix duplicate name files on rename
@@ -612,7 +627,7 @@ static int vfs_rename(const char *from, const char *to)
 				memset( dirEntry->name, 0 , sizeof( dirEntry->name) );
 				for (i = 1; i < strlen( to ); i++)
 					dirEntry->name[i-1] = to[i];
-				dwrite( block, (char*) dirEntry );
+				dwrite_cache( block, (char*) dirEntry );
 				return 0;
 			}
 		}
@@ -644,7 +659,7 @@ static int vfs_chmod(const char *file, mode_t mode)
 			fprintf( stderr, "vcBlock is not valid!\n" );
 			return -1;
 		}
-		dread(0, (char*) vcBlock);
+		dread_cache(0, (char*) vcBlock);
 		dirEntry = (dirent*) calloc(1, sizeof( dirent ) );
 		if ( !dirEntry ) {
 			fprintf( stderr, "dirEntry is not valid!\n" );
@@ -654,13 +669,13 @@ static int vfs_chmod(const char *file, mode_t mode)
 	int block = vcBlock->de_start;
 	unsigned int i;
 	while ( block - vcBlock->de_start < vcBlock->de_length ) {
-		dread(block, (char*) dirEntry);
+		dread_cache(block, (char*) dirEntry);
 		for ( i = 1; i < strlen( file ); i++ ) {
 			if ( file[i] != dirEntry->name[i-1] )
 				break;
 			if ( i == strlen( file ) -1 ) {
                 dirEntry->mode = mode;
-				dwrite( block, (char*) dirEntry );
+				dwrite_cache( block, (char*) dirEntry );
 				return 0;
 			}
 		}
@@ -687,7 +702,7 @@ static int vfs_chown(const char *file, uid_t uid, gid_t gid)
 			fprintf( stderr, "vcBlock is not valid!\n" );
 			return -1;
 		}
-		dread(0, (char*) vcBlock);
+		dread_cache(0, (char*) vcBlock);
 		dirEntry = (dirent*) calloc(1, sizeof( dirent ) );
 		if ( !dirEntry ) {
 			fprintf( stderr, "dirEntry is not valid!\n" );
@@ -697,7 +712,7 @@ static int vfs_chown(const char *file, uid_t uid, gid_t gid)
 	int block = vcBlock->de_start;
 	unsigned int i;
 	while ( block - vcBlock->de_start < vcBlock->de_length ) {
-		dread(block, (char*) dirEntry);
+		dread_cache(block, (char*) dirEntry);
 		for ( i = 1; i < strlen( file ); i++ ) {
 			if ( file[i] != dirEntry->name[i-1] )
 				break;
@@ -708,7 +723,7 @@ static int vfs_chown(const char *file, uid_t uid, gid_t gid)
                 if ( gid != -1 ) {
                     dirEntry->group = gid;
                 }
-				dwrite( block, (char*) dirEntry );
+				dwrite_cache( block, (char*) dirEntry );
 				return 0;
 			}
 		}
@@ -732,7 +747,7 @@ static int vfs_utimens(const char *file, const struct timespec ts[2])
     int block = find_dirent(file,dirEntry);
     dirEntry->access_time = ts[0].tv_sec;
     dirEntry->modify_time = ts[1].tv_sec;
-    dwrite(block,dirEntry);
+    dwrite_cache(block,dirEntry);
 	return 0;
 }
 
@@ -758,7 +773,7 @@ static int vfs_truncate(const char *file, off_t offset)
     if ( !vcBlock ) {
         return -1;
     }
-    dread(0,vcBlock);
+    dread_cache(0,vcBlock);
     if ( !dirEntry->valid ) {
         return 0;
     }
@@ -766,7 +781,7 @@ static int vfs_truncate(const char *file, off_t offset)
         return -1;
     dirEntry-> size = offset;
     int data_block_num = dirEntry->first_block;
-    dwrite(block,dirEntry);
+    dwrite_cache(block,dirEntry);
     char* eof_char;
     char* data_block = (char*)calloc(BLOCKSIZE, sizeof(char));
     if (!data_block) {
@@ -784,18 +799,18 @@ static int vfs_truncate(const char *file, off_t offset)
     {
         fatent_block_num = data_block_num / FATENTS_PER_BLOCK;
         fatent_block_offset = data_block_num % FATENTS_PER_BLOCK;
-	    dread(vcBlock->fat_start + fatent_block_num, fat_block);  
-	    dread(vcBlock->db_start + data_block_num, data_block); 
+	    dread_cache(vcBlock->fat_start + fatent_block_num, fat_block);  
+	    dread_cache(vcBlock->db_start + data_block_num, data_block); 
         eof = fat_block[fatent_block_offset].eof;
         if (count == offset/BLOCKSIZE) { 
             *(data_block+offset%BLOCKSIZE) = EOF;
             fat_block->eof = 1;
-            dwrite(vcBlock->fat_start + fatent_block_num, fat_block);  
-            dwrite(vcBlock->db_start + data_block_num, data_block);
+            dwrite_cache(vcBlock->fat_start + fatent_block_num, fat_block);  
+            dwrite_cache(vcBlock->db_start + data_block_num, data_block);
         }
         if (count > offset/BLOCKSIZE || offset == 0) {
             memset( fat_block+fatent_block_offset, 0 , sizeof(fatent));
-            dwrite(vcBlock->fat_start + fatent_block_num,fat_block);
+            dwrite_cache(vcBlock->fat_start + fatent_block_num,fat_block);
         }
         data_block_num = fat_block[fatent_block_offset].next;
         count++;
@@ -837,14 +852,14 @@ static int find_free_block() {
 		return -1;
 	}
     fatent* fatList = (fatent*) calloc(512,sizeof(char));
-    dread(vcBlock->fat_start,fatList);
+    dread_cache(vcBlock->fat_start,fatList);
     int fatent_offset = 0;
     int block_offset = 0;    
     while (fatList[fatent_offset % FATENTS_PER_BLOCK].used) {
         fatent_offset++;
         if ( fatent_offset % FATENTS_PER_BLOCK == 0 ) {
             block_offset++;
-            dread(vcBlock->fat_start + block_offset, fatList);
+            dread_cache(vcBlock->fat_start + block_offset, fatList);
         }
     }
     if ( fatList[fatent_offset % FATENTS_PER_BLOCK].used ) {
@@ -864,11 +879,11 @@ static int find_dirent(const char* path, dirent* dirEntry) {
 	if (!vcBlock || !dirEntry) {
 		return -1;
 	}
-	dread(0, vcBlock);
+	dread_cache(0, vcBlock);
 	char found = 0;
 	int block = vcBlock->de_start;
 	while(block - vcBlock->de_start < vcBlock->de_length) {
-		dread(block, dirEntry);
+		dread_cache(block, dirEntry);
 		if (strlen(filename) == strlen(dirEntry->name) &&
 		    strncmp(filename, dirEntry->name, strlen(filename)) == 0) {
 			found = 1;
@@ -883,7 +898,47 @@ static int find_dirent(const char* path, dirent* dirEntry) {
 		return -1;
 	}
 }
-
+void cache_initialize(int size) { 
+    cache_size = 500;
+    attempted_reads = 0;
+    data_cache = calloc(cache_size, BLOCKSIZE);
+    tags_cache = calloc(cache_size,sizeof(int));
+    if (data_cache == 0) { 
+        free(tags_cache);
+    }
+    if (tags_cache == 0) {
+        free(data_cache);
+    }
+    if (tags_cache && data_cache) {
+        memset( tags_cache, -1, cache_size*sizeof(int) );
+        fprintf(stderr,"Cache enabled with size %d blocks\n",cache_size);
+    }
+    return;
+}
+int dread_cache(int blocknum, char* buf) {
+    attempted_reads++;
+    int ret = BLOCKSIZE;
+    if ( data_cache && tags_cache ) {
+        if (tags_cache[blocknum%cache_size] == blocknum) {          
+            memcpy(buf, data_cache + BLOCKSIZE*(blocknum%cache_size),BLOCKSIZE);            
+            return ret;
+        }
+    }     
+    ret  = dread(blocknum,buf);
+    if ( data_cache && tags_cache ) {
+        tags_cache[blocknum%cache_size] = blocknum;
+        memcpy(data_cache + BLOCKSIZE*(blocknum%cache_size), buf, BLOCKSIZE);
+    }
+    return ret;
+}
+int dwrite_cache(int blocknum, char* buf) {
+    if ( data_cache && tags_cache ) {
+        tags_cache[blocknum%cache_size] = blocknum;
+        memcpy(data_cache + BLOCKSIZE*(blocknum%cache_size), buf, BLOCKSIZE);
+    }
+    dwrite(blocknum,buf);
+    return; 
+}
 int main(int argc, char *argv[]) {
     /* Do not modify this function */
     umask(0);
