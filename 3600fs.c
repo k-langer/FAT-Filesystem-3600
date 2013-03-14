@@ -448,9 +448,8 @@ static int vfs_write(const char *path, const char *buf, size_t size,
     if (data_block_num == -1 || data_block_num >= (vcBlock->fat_length * FATENTS_PER_BLOCK)) {
 	    return -ENOSPC;
     }
-    int size_actual = size;
     fat_count = 0; 
-    fats = (size_actual)/BLOCKSIZE + 1;
+    fats = size/BLOCKSIZE + 1;
     int cpy_size = 0;
     while (fat_count < fats) {   
         fprintf(stderr,"Writing to data block #: %d\n", data_block_num);
