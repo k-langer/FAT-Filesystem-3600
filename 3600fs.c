@@ -466,7 +466,7 @@ static int vfs_write(const char *path, const char *buf, size_t size,
         memcpy(data_block + fatent_block_offset*sizeof( fatent ), fatEntry, sizeof(fatent));
         dwrite_cache(vcBlock->fat_start + fatent_block_num, data_block); 
 
-        if ( fat_count == fats /*&& ( offset == 0 || (offset % 4096) != 0) */) {
+        if ( fat_count == fats ) {
             data_block_num = -1;
              fatEntry->eof = 1;
         } else {
@@ -554,8 +554,6 @@ static int vfs_delete(const char *path)
                         dread_cache(vcBlock->fat_start + fatent_block_num, fat_block);  
                         eof = fat_block[fatent_block_offset].eof;
                         data_block_num = fat_block[fatent_block_offset].next;
-                        fprintf(stderr,"HERE: %d\n",data_block_num);
-
                         memset( fat_block+fatent_block_offset, 0 , sizeof(fatent));
                         dwrite_cache(vcBlock->fat_start + fatent_block_num,fat_block);
                     }	
