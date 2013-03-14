@@ -809,11 +809,11 @@ static int vfs_truncate(const char *file, off_t offset)
             dwrite_cache(vcBlock->fat_start + fatent_block_num, fat_block);  
             dwrite_cache(vcBlock->db_start + data_block_num, data_block);
         }
+        data_block_num = fat_block[fatent_block_offset].next;
         if (count > offset/BLOCKSIZE || offset == 0) {
             memset( fat_block+fatent_block_offset, 0 , sizeof(fatent));
             dwrite_cache(vcBlock->fat_start + fatent_block_num,fat_block);
         }
-        data_block_num = fat_block[fatent_block_offset].next;
         count++;
         
     }	
