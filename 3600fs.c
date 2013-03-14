@@ -316,6 +316,7 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
         return 0;
     }
     int data_block_num = dirEntry->first_block;
+    int blocksToSkip = offset / BLOCKSIZE;
     char* eof_char;
     char* data_block = (char*)calloc(BLOCKSIZE, sizeof(char));
     if (!data_block) {
@@ -328,24 +329,32 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
     int eof = 0;
     int count = 0;
     int bytesRead = 0;
-    int fatent_block_num;
-	int fatent_block_offset;
+    int fatent_block_num = data_block_num / FATENTS_PER_BLOCK;
+    int fatent_block_offset = data_block_num % FATENTS_PER_BLOCK;
     int byte_offset = 0;
-   
+    
+    
+    while (blocksToSkip--) {
+	dread(vcBlock->fat_start + fatent_block_num, data_block);
+	memcpy(fatEntry, data_block + fatent_block_offset * sizeof(fatent), sizeof(fatent));
+   	data_block_num = fatEntry->next;
+    }
+
     while (!eof && bytesRead < size)
     {
 	if (count) {
 	    byte_offset = 0;
 	} else {
-	    byte_offset = offset;
+	    byte_offset = offset % BLOCKSIZE;
         }
 	fatent_block_num = data_block_num / FATENTS_PER_BLOCK;
         fatent_block_offset = data_block_num % FATENTS_PER_BLOCK;
 	    dread(vcBlock->db_start + data_block_num, data_block); 
-        memcpy(buf+count*BLOCKSIZE, data_block + byte_offset, BLOCKSIZE);
-	bytesRead += BLOCKSIZE;
+        memcpy(buf+count*BLOCKSIZE, data_block + byte_offset, BLOCKSIZE - byte_offset);
+	bytesRead += BLOCKSIZE - byte_offset;
         dread(vcBlock->fat_start + fatent_block_num, data_block);  
-        memcpy(fatEntry, data_block + fatent_block_offset * sizeof(fatent), sizeof(fatent));
+        fprintf(stderr, "reading from block number %i", data_block_num);
+	memcpy(fatEntry, data_block + fatent_block_offset * sizeof(fatent), sizeof(fatent));
 	eof = fatEntry->eof;
         data_block_num = fatEntry->next;
         count++;
@@ -422,7 +431,7 @@ static int vfs_write(const char *path, const char *buf, size_t size,
 	    return -ENOSPC;
     }
 
-    int size_actual = (size+offset)%4097;
+    int size_actual = size;
     fat_count = 0; 
     fats = (size_actual)/BLOCKSIZE + 1;
     int cpy_size = 0;
