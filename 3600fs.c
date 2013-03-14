@@ -422,6 +422,11 @@ static int vfs_write(const char *path, const char *buf, size_t size,
 	        dread_cache(vcBlock->fat_start + fatent_block_num, data_block);
         	memcpy( fatEntry, data_block + fatent_block_offset * sizeof( fatent ), sizeof( fatent ) );
             data_block_num = fatEntry->next;
+            if ( fatEntry->eof )
+            {
+                fatEntry->eof = 0;
+                dwrite_cache(vcBlock->fat_start + fatent_block_num, data_block);
+            }
             count++;
         }
         fprintf(stderr, "At data block %d\n", data_block_num);
@@ -432,7 +437,7 @@ static int vfs_write(const char *path, const char *buf, size_t size,
     if (data_block_num == -1 || data_block_num >= (vcBlock->fat_length * FATENTS_PER_BLOCK)) {
 	    return -ENOSPC;
     }
-
+    
     int size_actual = (size+offset)%4097;
     fat_count = 0; 
     fats = (size_actual)/BLOCKSIZE + 1;
@@ -461,7 +466,7 @@ static int vfs_write(const char *path, const char *buf, size_t size,
         memcpy(data_block + fatent_block_offset*sizeof( fatent ), fatEntry, sizeof(fatent));
         dwrite_cache(vcBlock->fat_start + fatent_block_num, data_block); 
 
-        if ( fat_count == fats && ( offset == 0 || (offset % 4096) != 0) ) {
+        if ( fat_count == fats /*&& ( offset == 0 || (offset % 4096) != 0) */) {
             data_block_num = -1;
              fatEntry->eof = 1;
         } else {
@@ -543,11 +548,14 @@ static int vfs_delete(const char *path)
                     int fatent_block_offset;
                     while (!eof && dirEntry->size > 0)
                     {
+                        
                         fatent_block_num = data_block_num / FATENTS_PER_BLOCK;
                         fatent_block_offset = data_block_num % FATENTS_PER_BLOCK;
                         dread_cache(vcBlock->fat_start + fatent_block_num, fat_block);  
                         eof = fat_block[fatent_block_offset].eof;
                         data_block_num = fat_block[fatent_block_offset].next;
+                        fprintf(stderr,"HERE: %d\n",data_block_num);
+
                         memset( fat_block+fatent_block_offset, 0 , sizeof(fatent));
                         dwrite_cache(vcBlock->fat_start + fatent_block_num,fat_block);
                     }	
