@@ -307,11 +307,20 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
         TODO Fix offset reads (and writes) 
     */
     fprintf(stderr,"vfs_read called on path %s for size %d at offset %d\n",path,size,offset);
+
     dirent* dirEntry = (dirent*)calloc(1,sizeof(dirent));
     if (!dirEntry) {
         return -1;
     }
-    
+    char* data_block = (char*)calloc(BLOCKSIZE, sizeof(char));
+    if (!data_block) {
+			return -1;
+	}
+    fatent* fatEntry = (fatent*)calloc(1, sizeof(fatent));
+    if (!fatEntry) {
+			return -1;
+	}
+
     int block = find_dirent(path,dirEntry);
     if ( block == -1 ) {
         return -1;
@@ -329,14 +338,6 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
     int data_block_num = dirEntry->first_block;
     int blocksToSkip = offset / BLOCKSIZE;
     char* eof_char;
-    char* data_block = (char*)calloc(BLOCKSIZE, sizeof(char));
-    if (!data_block) {
-			return -1;
-	}
-    fatent* fatEntry = (fatent*)calloc(1, sizeof(fatent));
-    if (!fatEntry) {
-			return -1;
-	}
     int eof = 0;
     int count = 0;
     int bytesRead = 0;
@@ -366,7 +367,7 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
         memcpy(buf+count*BLOCKSIZE, data_block + byte_offset, BLOCKSIZE - byte_offset);
 	bytesRead += BLOCKSIZE - byte_offset;
         dread_cache(vcBlock->fat_start + fatent_block_num, data_block);  
-        fprintf(stderr, "reading from block number %i", data_block_num);
+        fprintf(stderr, "reading from block number %i\n", data_block_num);
 	memcpy(fatEntry, data_block + fatent_block_offset * sizeof(fatent), sizeof(fatent));
 	eof = fatEntry->eof;
         data_block_num = fatEntry->next;
@@ -376,6 +377,7 @@ static int vfs_read(const char *path, char *buf, size_t size, off_t offset,
     if (eof_char) {
         *eof_char = 0;
     }
+    
 	free(data_block);
     free(fatEntry);
     free(dirEntry);
@@ -399,7 +401,6 @@ static int vfs_write(const char *path, const char *buf, size_t size,
   /* 3600: NOTE THAT IF THE OFFSET+SIZE GOES OFF THE END OF THE FILE, YOU
            MAY HAVE TO EXTEND THE FILE (ALLOCATE MORE BLOCKS TO IT). */
     
-    /*TODO fix offset writes. */	
 
     fprintf(stderr,"vfs_write called on %s for size %d and offset %d\n",path,size,offset);
 	dirent* dirEntry = (dirent*)calloc(1, sizeof(dirent));
@@ -464,6 +465,7 @@ static int vfs_write(const char *path, const char *buf, size_t size,
         } else {
             cpy_size = BLOCKSIZE - byte_offset;
         }       
+        
         memcpy(data_block + byte_offset, buf+BLOCKSIZE*fat_count, cpy_size);
 	    dwrite_cache(vcBlock->db_start + data_block_num, data_block);
 	    fatent_block_num = data_block_num / FATENTS_PER_BLOCK;
@@ -537,7 +539,10 @@ static int vfs_delete(const char *path)
 	}
 				
 	int block = vcBlock->de_start;
-	
+	fatent* fat_block = (fatent*)calloc(BLOCKSIZE, sizeof(char));
+     if (!fat_block) {
+	        return -1;
+     }
 	while ( block - vcBlock->de_start < vcBlock->de_length ) {
 		dread_cache(block, (char*) dirEntry);
 		for ( i = lastSlash+1; i < strlen( path ); i++ ) {
@@ -548,10 +553,8 @@ static int vfs_delete(const char *path)
                 if ( dirEntry->valid) {
                     
                     int data_block_num = dirEntry->first_block;
-                    fatent* fat_block = (fatent*)calloc(BLOCKSIZE, sizeof(char));
-                    if (!fat_block) {
-	                        return -1;
-                    }
+                   
+                   
                     int eof = 0;
                     int fatent_block_num;
                     int fatent_block_offset;
@@ -575,6 +578,7 @@ static int vfs_delete(const char *path)
 		}
 		block++;
 	}
+    free(fat_block);
 	fprintf( stderr, "File not found!\n" );
 	return -1;
 }
@@ -589,7 +593,7 @@ static int vfs_delete(const char *path)
 static int vfs_rename(const char *from, const char *to)
 {
 	fprintf( stderr, "vfs_rename called from %s to %s\n",from,to );	
-	dirent*dirEntry;
+	dirent*dirEntry = (dirent*) calloc(1, sizeof( dirent ) );;
 	if ( strncmp(from, "/", 1) ) {
 		fprintf( stderr, "Directory is not valid!\n" );
 		return -1;
@@ -599,7 +603,6 @@ static int vfs_rename(const char *from, const char *to)
 			return -1;
 		}
 		dread_cache(0, (char*) vcBlock);
-		dirEntry = (dirent*) calloc(1, sizeof( dirent ) );
 		if ( !dirEntry ) {
 			fprintf( stderr, "dirEntry is not valid!\n" );
 			return -1;
@@ -610,17 +613,6 @@ static int vfs_rename(const char *from, const char *to)
 	while ( block - vcBlock->de_start < vcBlock->de_length ) {
 		dread_cache(block, (char*) dirEntry);
 		fprintf( stderr, "to: %s cmp: %s\n",to,dirEntry->name);
-		/*
-        //TODO Fix duplicate name files on rename
-        for ( i = 1; i < strlen( to ); i++ ) {
-		    if ( to[i] != dirEntry->name[i-1] || strlen( dirEntry->name ) != strlen( to ) -1 ) {
-			    break; 		
-		    } 
-            if ( i == strlen( to ) ){
-		        return -EEXIST;
-            }
-		}
-        */
 		for ( i = 1; i < strlen( from ); i++ ) {
 			if ( from[i] != dirEntry->name[i-1] )
 				break;
@@ -634,6 +626,7 @@ static int vfs_rename(const char *from, const char *to)
 		}
 		block++;
 	}
+    free(dirEntry);
 	fprintf( stderr, "File not found!\n" );
 	return -1;
 }
@@ -651,7 +644,7 @@ static int vfs_rename(const char *from, const char *to)
 static int vfs_chmod(const char *file, mode_t mode)
 {
     fprintf( stderr, "vfs_chmod called on %s with %o\n",file,mode );	
-	dirent*dirEntry;
+	dirent*dirEntry = (dirent*) calloc(1, sizeof( dirent ) );
 	if ( strncmp(file, "/", 1) ) {
 		fprintf( stderr, "Directory is not valid!\n" );
 		return -1;
@@ -661,7 +654,6 @@ static int vfs_chmod(const char *file, mode_t mode)
 			return -1;
 		}
 		dread_cache(0, (char*) vcBlock);
-		dirEntry = (dirent*) calloc(1, sizeof( dirent ) );
 		if ( !dirEntry ) {
 			fprintf( stderr, "dirEntry is not valid!\n" );
 			return -1;
@@ -682,6 +674,7 @@ static int vfs_chmod(const char *file, mode_t mode)
 		}
 		block++;
 	}
+    free(dirEntry);
 	fprintf( stderr, "File not found!\n" );
 	return -1;
 }
@@ -694,7 +687,7 @@ static int vfs_chmod(const char *file, mode_t mode)
 static int vfs_chown(const char *file, uid_t uid, gid_t gid)
 {
 	fprintf( stderr, "vfs_chown called on %s with %d %d\n", file , uid , gid );	
-	dirent*dirEntry;
+	dirent*dirEntry = (dirent*) calloc(1, sizeof( dirent ) );;
 	if ( strncmp(file, "/", 1) ) {
 		fprintf( stderr, "Directory is not valid!\n" );
 		return -1;
@@ -703,8 +696,7 @@ static int vfs_chown(const char *file, uid_t uid, gid_t gid)
 			fprintf( stderr, "vcBlock is not valid!\n" );
 			return -1;
 		}
-		dread_cache(0, (char*) vcBlock);
-		dirEntry = (dirent*) calloc(1, sizeof( dirent ) );
+		dread_cache(0, (char*) vcBlock); 
 		if ( !dirEntry ) {
 			fprintf( stderr, "dirEntry is not valid!\n" );
 			return -1;
@@ -730,6 +722,7 @@ static int vfs_chown(const char *file, uid_t uid, gid_t gid)
 		}
 		block++;
 	}
+    free(dirEntry);
 	fprintf( stderr, "File not found!\n" );
 	return -1;
 }
@@ -749,6 +742,7 @@ static int vfs_utimens(const char *file, const struct timespec ts[2])
     dirEntry->access_time = ts[0].tv_sec;
     dirEntry->modify_time = ts[1].tv_sec;
     dwrite_cache(block,dirEntry);
+    free(dirEntry);
 	return 0;
 }
 
@@ -937,8 +931,7 @@ int dwrite_cache(int blocknum, char* buf) {
         tags_cache[blocknum%cache_size] = blocknum;
         memcpy(data_cache + BLOCKSIZE*(blocknum%cache_size), buf, BLOCKSIZE);
     }
-    dwrite(blocknum,buf);
-    return; 
+    return dwrite(blocknum,buf);
 }
 int main(int argc, char *argv[]) {
     /* Do not modify this function */
