@@ -70,10 +70,12 @@ static void* vfs_mount(struct fuse_conn_info *conn) {
     dread_cache(0, vcBlock);
     cache_initialize(0);
     // Do not touch or move this code; connects the disk
-    if(vcBlock->magic_number != MAGIC_NUMBER) { 
+    if(vcBlock->magic_number != MAGIC_NUMBER || vcBlock->mounted == 1) { 
 	printf("Cannot mount file system\n");
         exit(1);
-    }	
+    }
+    vcBlock->mounted = 1;
+    dwrite_cache(0, vcBlock);	
     return NULL;
 }
 
@@ -84,6 +86,12 @@ static void* vfs_mount(struct fuse_conn_info *conn) {
 static void vfs_unmount (void *private_data) {
     fprintf(stderr,"total reads without cache: %d\n",attempted_reads);
     fprintf(stderr, "vfs_unmount called\n");
+    if (!vcBlock) {
+    	return;
+    }
+    dread_cache(0, vcBlock);
+    vcBlock->mounted = 0;
+    dwrite_cache(0, vcBlock);
 
     /* 3600: YOU SHOULD ADD CODE HERE TO MAKE SURE YOUR ON-DISK STRUCTURES
              ARE IN-SYNC BEFORE THE DISK IS UNMOUNTED (ONLY NECESSARY IF YOU
